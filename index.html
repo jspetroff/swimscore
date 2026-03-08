@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SwimScore</title>
+<style>
+:root{
+  --bg:#0f1117;--bg2:#171b24;--bg3:#1e2330;--border:#2a3045;
+  --gold:#c9a84c;--gold2:#e8c97a;--text:#e8ecf4;--text-dim:#6b7a99;
+  --green:#4caf7d;--red:#e05c5c;--blue:#5c9be0;
+  --fm:'SF Mono',Monaco,monospace;--fd:'Inter',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--fd);font-size:14px;min-height:100vh;}
+a{color:var(--gold);}
+
+/* Layout */
+.hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem;}
+.logo{font-family:var(--fm);font-size:1.1rem;font-weight:700;color:var(--gold);letter-spacing:.05em;}
+.hmeta{font-size:.75rem;color:var(--text-dim);font-family:var(--fm);}
+.wrap{max-width:1200px;margin:0 auto;padding:1.5rem;}
+
+/* Tabs */
+.tabs{display:flex;gap:.25rem;margin-bottom:1.5rem;background:var(--bg2);padding:.375rem;border-radius:8px;border:1px solid var(--border);}
+.tb{background:none;border:none;color:var(--text-dim);padding:.5rem 1rem;border-radius:6px;cursor:pointer;font-family:var(--fm);font-size:.72rem;letter-spacing:.08em;transition:all .2s;}
+.tb:hover{color:var(--text);background:var(--bg3);}
+.tb.act{background:var(--bg3);color:var(--gold);border:1px solid var(--border);}
+.tp{display:none;} .tp.act{display:block;}
+
+/* Cards */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:1rem;}
+.ct{font-family:var(--fm);font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);margin-bottom:.875rem;text-transform:uppercase;}
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+@media(max-width:640px){.cgrid{grid-template-columns:1fr;}}
+
+/* Form */
+.frow{display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;}
+.fg1{display:flex;flex-direction:column;gap:.375rem;flex:1;min-width:140px;}
+label{font-size:.72rem;color:var(--text-dim);font-family:var(--fm);letter-spacing:.06em;}
+input[type=text],input[type=date],select{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  padding:.5rem .75rem;border-radius:6px;font-size:.85rem;width:100%;
+  font-family:var(--fd);outline:none;transition:border .2s;
+}
+input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--gold);}
+.btn{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.5rem 1rem;border-radius:6px;cursor:pointer;font-size:.8rem;font-family:var(--fd);transition:all .2s;}
+.btn:hover{border-color:var(--gold);color:var(--gold);}
+.bto{background:transparent;}
+.bsm{padding:.3rem .6rem;font-size:.72rem;}
+.bprimary{background:var(--gold);color:#0f1117;border-color:var(--gold);font-weight:600;}
+.bprimary:hover{background:var(--gold2);color:#0f1117;}
+
+/* Upload zone */
+.uz{border:2px dashed var(--border);border-radius:8px;padding:2.5rem;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.uz:hover{border-color:var(--gold);background:rgba(201,168,76,.04);}
+.uz input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;z-index:5;}
+.ui{font-size:2rem;margin-bottom:.5rem;}
+.ul{font-weight:600;margin-bottom:.25rem;}
+.us{font-size:.75rem;color:var(--text-dim);}
+
+/* Status */
+.st{padding:.5rem .75rem;border-radius:6px;font-size:.8rem;margin-top:.75rem;display:none;}
+.st.ok{background:rgba(76,175,125,.15);border:1px solid rgba(76,175,125,.3);color:var(--green);display:block;}
+.st.err{background:rgba(224,92,92,.15);border:1px solid rgba(224,92,92,.3);color:var(--red);display:block;}
+
+/* Session pills */
+.sp{display:flex;gap:.375rem;flex-wrap:wrap;}
+.pill{padding:.35rem .75rem;border-radius:20px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;font-size:.75rem;font-family:var(--fm);color:var(--text-dim);transition:all .2s;}
+.pill:hover{border-color:var(--gold);color:var(--text);}
+.pill.active{background:var(--gold);color:#0f1117;border-color:var(--gold);font-weight:700;}
+
+/* Checklist */
+.cl{display:flex;flex-wrap:wrap;gap:.375rem;max-height:180px;overflow-y:auto;}
+.ci{display:flex;align-items:center;gap:.375rem;background:var(--bg3);border:1px solid var(--border);padding:.3rem .6rem;border-radius:5px;cursor:pointer;font-size:.78rem;}
+.ci input{cursor:pointer;accent-color:var(--gold);}
+.ifx{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;}
+
+/* Leaderboard table */
+.lb{width:100%;border-collapse:collapse;font-size:.82rem;}
+.lb th{font-family:var(--fm);font-size:.65rem;letter-spacing:.1em;color:var(--text-dim);padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap;}
+.lb th:hover{color:var(--gold);}
+.lb th.sa::after{content:' ▲';color:var(--gold);}
+.lb th.sd::after{content:' ▼';color:var(--gold);}
+.lb td{padding:.5rem .75rem;border-bottom:1px solid rgba(42,48,69,.5);}
+.lb tr:last-child td{border-bottom:none;}
+.lb tr.ht td{background:rgba(201,168,76,.06);}
+.rb{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:.65rem;font-weight:700;font-family:var(--fm);}
+.r1{background:var(--gold);color:#0f1117;}
+.r2{background:#a8a9ac;color:#0f1117;}
+.r3{background:#c07d3a;color:#fff;}
+.rx{background:var(--bg3);color:var(--text-dim);}
+
+/* Depth bars */
+.dr{display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem;}
+.dl{font-size:.72rem;font-family:var(--fm);color:var(--text-dim);width:60px;flex-shrink:0;}
+.dbw{flex:1;background:var(--bg3);border-radius:4px;height:20px;overflow:hidden;}
+.db{height:100%;border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:.68rem;font-family:var(--fm);color:#0f1117;font-weight:700;transition:width .4s ease;white-space:nowrap;}
+.bs{background:var(--blue);}
+.bd{background:var(--green);}
+.bi{background:#b06fd4;}
+.br{background:var(--gold);}
+.bb{background:#5c9be0;}
+.bbr{background:#e07c5c;}
+.bfl{background:#9b5ce0;}
+.dp{font-size:.72rem;font-family:var(--fm);color:var(--text-dim);width:36px;text-align:right;}
+.dv{border:none;border-top:1px solid var(--border);margin:.75rem 0;}
+.fl{display:flex;flex-wrap:wrap;gap:.375rem;}
+.fi{font-size:.72rem;padding:.25rem .5rem;border-radius:4px;}
+.ff{background:rgba(76,175,125,.15);color:var(--green);}
+.fz{background:rgba(224,92,92,.1);color:var(--red);}
+
+/* Live scoring */
+.ea{border:1px solid var(--border);border-radius:8px;margin-bottom:.5rem;overflow:hidden;}
+.ehr{display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;cursor:pointer;background:var(--bg3);transition:background .2s;}
+.ehr:hover{background:var(--bg2);}
+.ehr.done{border-left:3px solid var(--green);}
+.ehr.partial{border-left:3px solid var(--gold);}
+.ehr.pending{border-left:3px solid var(--border);}
+.en{font-family:var(--fm);font-size:.72rem;color:var(--text-dim);width:36px;}
+.enm{flex:1;font-size:.82rem;}
+.tag{font-size:.62rem;font-family:var(--fm);padding:.15rem .4rem;border-radius:3px;font-weight:700;}
+.tgi{background:rgba(92,155,224,.15);color:var(--blue);}
+.tgr{background:rgba(201,168,76,.15);color:var(--gold);}
+.epb{font-size:.7rem;font-family:var(--fm);color:var(--text-dim);}
+.eb{display:none;padding:.75rem 1rem;border-top:1px solid var(--border);}
+.eb.open{display:block;}
+.pg{display:flex;flex-direction:column;gap:.25rem;}
+.pr{display:grid;grid-template-columns:32px 1fr 1fr auto;gap:.5rem;align-items:center;}
+.pr select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.25rem .4rem;border-radius:4px;font-size:.78rem;}
+.pn{font-family:var(--fm);font-size:.72rem;color:var(--text-dim);text-align:center;}
+.sc{display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--text-dim);}
+
+/* Clinch banner */
+.cb{padding:.75rem 1rem;border-radius:8px;font-size:.85rem;margin-bottom:1rem;}
+.cw{background:rgba(76,175,125,.15);border:1px solid rgba(76,175,125,.3);}
+.cl2{background:rgba(224,92,92,.1);border:1px solid rgba(224,92,92,.2);}
+.cn{background:var(--bg3);border:1px solid var(--border);}
+
+/* Empty state */
+.es{display:flex;flex-direction:column;align-items:center;gap:.75rem;padding:3rem;color:var(--text-dim);text-align:center;}
+.ico{font-size:2.5rem;}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">&#9652; SWIMSCORE</div>
+  <div class="hmeta" id="hmeta">No meet loaded</div>
+</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tb act" onclick="showTab('setup',this)">01 &middot; Setup</button>
+    <button class="tb" onclick="showTab('proj',this)">02 &middot; Projections</button>
+    <button class="tb" onclick="showTab('depth',this)">03 &middot; Depth</button>
+    <button class="tb" onclick="showTab('live',this)">04 &middot; Live</button>
+  </div>
+
+  <!-- TAB 1: SETUP -->
+  <div id="tab-setup" class="tp act">
+    <div class="card">
+      <div class="ct">Meet Info</div>
+      <div class="frow">
+        <div class="fg1"><label>Meet Name</label><input type="text" id="mn" placeholder="e.g. NCAA D3 Championships" oninput="saveCfg()"></div>
+        <div class="fg1"><label>Date</label><input type="date" id="md" oninput="saveCfg()"></div>
+        <div class="fg1"><label>Home Team</label><input type="text" id="ht" value="Emory" oninput="saveCfg()"></div>
+        <div class="fg1"><label>Scoring Model</label>
+          <select id="sm" onchange="saveCfg()">
+            <option value="uaa">UAA Championship</option>
+            <option value="ncaa">NCAA Championship</option>
+            <option value="dual">Dual Meet</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">Psych Sheet Import</div>
+      <div class="uz" id="uz">
+        <input type="file" id="pfu" accept=".pdf">
+        <div class="ui">&#128196;</div>
+        <div class="ul">Click to Upload Psych Sheet PDF</div>
+        <div class="us">NCAA D3 psych sheet &mdash; or paste text below</div>
+      </div>
+      <div style="margin-top:1rem">
+        <label style="display:block;margin-bottom:.375rem;font-size:.75rem;color:var(--text-dim);font-family:var(--fm);letter-spacing:.06em">OR PASTE TEXT &mdash; Open PDF in browser &rarr; Select All &rarr; Copy &rarr; Paste here:</label>
+        <textarea id="pt" rows="6" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.5rem .75rem;border-radius:6px;font-size:.78rem;font-family:var(--fm);resize:vertical;outline:none" placeholder="Paste psych sheet text here..."></textarea>
+        <button class="btn bprimary" style="margin-top:.5rem" onclick="parsePasted()">&#9654; Parse Pasted Text</button>
+      </div>
+      <div id="ps"></div>
+    </div>
+
+    <div id="pps" style="display:none">
+      <div class="card">
+        <div class="ct">Session Filter</div>
+        <div class="sp" id="ssp">
+          <div class="pill active" onclick="setSess('full',this)">Full Meet</div>
+          <div class="pill" onclick="setSess('day1',this)">Day 1</div>
+          <div class="pill" onclick="setSess('day2',this)">Day 2</div>
+          <div class="pill" onclick="setSess('day3',this)">Day 3</div>
+          <div class="pill" onclick="setSess('day4',this)">Day 4</div>
+        </div>
+      </div>
+      <div class="cgrid">
+        <div class="card">
+          <div class="ct">Teams Detected <span style="float:right">
+            <button class="btn bto bsm" onclick="setAllTm(true)">All</button>
+            <button class="btn bto bsm" onclick="setAllTm(false)">None</button>
+          </span></div>
+          <div class="cl" id="tc"></div>
+        </div>
+        <div class="card">
+          <div class="ct">Events <span style="font-size:.75rem;color:var(--text-dim)">(toggle &middot; assign day)</span></div>
+          <div class="cl" id="ec"></div>
+        </div>
+      </div>
+      <div style="text-align:right;margin-top:.5rem">
+        <button class="btn bto bsm" onclick="clearAll()">&#128465; Clear All Data</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: PROJECTIONS -->
+  <div id="tab-proj" class="tp">
+    <div id="pe" class="es"><div class="ico">&#128202;</div><div>Load a psych sheet in Setup to see projections.</div></div>
+    <div id="pc" style="display:none">
+      <div class="card">
+        <div class="ct">Projected Leaderboard</div>
+        <div class="ifx" style="margin-bottom:1rem">
+          <div class="sp" id="psp">
+            <div class="pill active" onclick="setProjSess('full',this)">Total</div>
+            <div class="pill" onclick="setProjSess('day1',this)">Day 1</div>
+            <div class="pill" onclick="setProjSess('day2',this)">Day 2</div>
+            <div class="pill" onclick="setProjSess('day3',this)">Day 3</div>
+            <div class="pill" onclick="setProjSess('day4',this)">Day 4</div>
+          </div>
+        </div>
+        <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+          <table class="lb" id="pt2" style="border-collapse:collapse">
+            <thead><tr>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('#')">#</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('team')">Team</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('total')">Points</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('sprints')">Sprints</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('distance')">Free</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('back')">Back</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('breast')">Breast</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('fly')">Fly</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('im')">IM</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" onclick="srt('relays')">Relays</th>
+            </tr></thead>
+            <tbody id="ptb"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" id="pev">
+        <div class="ct" id="pevt">Event Breakdown</div>
+        <div style="overflow-x:auto">
+          <table class="lb" id="pevtb">
+            <thead><tr id="pevhdr"></tr></thead>
+            <tbody id="pevbd"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: DEPTH -->
+  <div id="tab-depth" class="tp">
+    <div id="de" class="es"><div class="ico">&#128269;</div><div>Load a psych sheet in Setup to analyze team depth.</div></div>
+    <div id="dc2" style="display:none">
+      <div class="card">
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:flex-end">
+          <div class="fg1" style="max-width:160px">
+            <label>Compare</label>
+            <select id="dtn" onchange="renderDepthSetup()">
+              <option value="2">2 Teams</option>
+              <option value="3">3 Teams</option>
+              <option value="4">4 Teams</option>
+              <option value="5">5 Teams</option>
+            </select>
+          </div>
+          <div id="dtselectors" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end"></div>
+        </div>
+      </div>
+      <div id="dbarcharts" style="display:grid;gap:1rem"></div>
+      <div class="card" style="margin-top:1rem">
+        <div class="ct" id="devt">Event-by-Event Comparison</div>
+        <div style="overflow-x:auto">
+          <table class="lb" id="devtb">
+            <thead><tr id="devhdr"></tr></thead>
+            <tbody id="devbd"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: LIVE -->
+  <div id="tab-live" class="tp">
+    <div id="le" class="es"><div class="ico">&#127944;</div><div>Load a psych sheet in Setup to begin live scoring.</div></div>
+    <div id="lc" style="display:none">
+      <div class="cgrid">
+        <div class="card">
+          <div class="ct">Leaderboard</div>
+          <div style="max-height:520px;overflow-y:auto">
+            <table class="lb" style="border-collapse:collapse"><thead><tr><th style="position:sticky;top:0;background:var(--bg2);z-index:1">#</th><th style="position:sticky;top:0;background:var(--bg2);z-index:1">Team</th><th style="position:sticky;top:0;background:var(--bg2);z-index:1">Points</th><th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="A Final swims (places 1-8)">A Fin</th><th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="B Final swims (places 9-16)">B Fin</th><th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="C Final swims (places 17-24)">C Fin</th></tr></thead><tbody id="ltb"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="ct">Clinch Status</div>
+          <div id="clinch" class="cb cn">Loading...</div>
+          <div style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem">Points remaining for 1st place: <strong id="avail">—</strong></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct">Session Filter</div>
+        <div class="sp" id="lsp">
+          <div class="pill active" onclick="setLiveSess('full',this)">Full Meet</div>
+          <div class="pill" onclick="setLiveSess('day1',this)">Day 1</div>
+          <div class="pill" onclick="setLiveSess('day2',this)">Day 2</div>
+          <div class="pill" onclick="setLiveSess('day3',this)">Day 3</div>
+          <div class="pill" onclick="setLiveSess('day4',this)">Day 4</div>
+        </div>
+      </div>
+      <div class="card" id="leb">
+        <div class="ct" id="lebt">Live Event Breakdown</div>
+        <div style="overflow-x:auto">
+          <table class="lb" id="lebtb">
+            <thead><tr id="lebhdr"></tr></thead>
+            <tbody id="lebbd"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" id="lfin">
+        <div class="ct">Finals Breakdown by Event</div>
+        <div style="overflow-x:auto">
+          <table class="lb" id="lfintb">
+            <thead><tr id="lfinhdr"></tr></thead>
+            <tbody id="lfinbd"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="lev"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── SCORING MODELS ────────────────────────────────────────────────────────
+const MDL={
+  uaa:  {ind:[32,28,27,26,25,24,23,22,20,17,16,15,14,13,12,11,9,7,6,5,4,3,2,1], rel:[64,56,54,52,50,48,46,44,40,34,32,30,28,26,24,22]},
+  ncaa: {ind:[20,17,16,15,14,13,12,11,9,7,6,5,4,3,2,1], rel:[40,34,32,30,28,26,24,22,18,14,12,10,8,6,4,2]},
+  dual: {ind:[9,7,6,5,4,3,2,1], rel:[11,4]}
+};
+
+const SK='swimscore_v3';
+let S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};
+
+function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
+function load(){try{var d=localStorage.getItem(SK);if(d){var p=JSON.parse(d);Object.assign(S,p);}}catch(e){}}
+
+// ── TABS ──────────────────────────────────────────────────────────────────
+function showTab(id,btn){
+  document.querySelectorAll('.tp').forEach(function(t){t.classList.remove('act');});
+  document.querySelectorAll('.tb').forEach(function(b){b.classList.remove('act');});
+  document.getElementById('tab-'+id).classList.add('act');
+  btn.classList.add('act');
+  if(id==='proj')renderProj();
+  if(id==='depth')renderDepthSetup();
+  if(id==='live')renderLive();
+}
+
+// ── CONFIG ────────────────────────────────────────────────────────────────
+function saveCfg(){
+  S.meetName=document.getElementById('mn').value;
+  S.meetDate=document.getElementById('md').value;
+  S.homeTeam=document.getElementById('ht').value;
+  S.scoringModel=document.getElementById('sm').value;
+  document.getElementById('hmeta').textContent=(S.meetName||'Unnamed Meet')+(S.meetDate?' \u00b7 '+S.meetDate:'');
+  save();renderProj();
+}
+
+function setSess(s,el){
+  S.session=s;
+  document.querySelectorAll('#ssp .pill').forEach(function(p){p.classList.remove('active');});
+  el.classList.add('active');
+  save();
+}
+
+function setProjSess(s,el){
+  S.projSession=s;
+  document.querySelectorAll('#psp .pill').forEach(function(p){p.classList.remove('active');});
+  el.classList.add('active');
+  save();renderProj();
+}
+
+function setLiveSess(s,el){
+  S.liveSession=s;
+  document.querySelectorAll('#lsp .pill').forEach(function(p){p.classList.remove('active');});
+  el.classList.add('active');
+  save();renderLiveEvs();
+}
+
+// ── PDF UPLOAD ────────────────────────────────────────────────────────────
+function handlePDF(file){
+  if(!file){showSt('No file selected.','err');return;}
+  showSt('Reading PDF...','ok');
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var bytes=new Uint8Array(e.target.result);
+    var binary='';
+    for(var i=0;i<bytes.length;i++){binary+=String.fromCharCode(bytes[i]);}
+    var b64=btoa(binary);
+    fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:8000,
+        messages:[{
+          role:'user',
+          content:[
+            {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
+            {type:'text',text:'Extract all text from this NCAA swimming psych sheet exactly as it appears, preserving line structure. Output only the raw text with no commentary or formatting.'}
+          ]
+        }]
+      })
+    })
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.error){showSt('API error: '+data.error.message,'err');return;}
+      var txt=(data.content||[]).map(function(b){return b.text||'';}).join('\n');
+      if(!txt||txt.trim().length<50){showSt('Could not extract text from PDF.','err');return;}
+      parseSheet(txt);
+    })
+    .catch(function(err){showSt('Upload error: '+err.message,'err');console.error(err);});
+  };
+  reader.onerror=function(){showSt('File read failed.','err');};
+  reader.readAsArrayBuffer(file);
+}
+
+function parsePasted(){
+  var t=document.getElementById('pt').value;
+  if(!t.trim()){showSt('Paste text first.','err');return;}
+  parseSheet(t);
+}
+
+// ── PARSER ────────────────────────────────────────────────────────────────
+function parseSheet(raw){
+  var ELIG={FR:1,SO:1,JR:1,SR:1,GRAD:1,GR:1,'5TH':1};
+  var STD={B:1,BB:1,A:1,AA:1,AAA:1,AAAA:1,NS:1,NT:1};
+  function isTime(s){return /^\d{1,2}:\d{2}\.\d{2}$/.test(s)||/^\d{2,3}\.\d{2}$/.test(s);}
+  function skipLine(l){
+    if(l.length<3)return true;
+    if(/^---/.test(l)||/INVITED/i.test(l)||/^Name /i.test(l))return true;
+    if(/^Team.Name/i.test(l)||/^Std.Seed/i.test(l)||/^Selections/i.test(l))return true;
+    if(/^\d+\/\d+/.test(l)||/^Page \d/i.test(l))return true;
+    return false;
+  }
+  var lines=raw.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>0;});
+  var events=[],cur=null,sc=0,tot=0;
+  for(var li=0;li<lines.length;li++){
+    var line=lines[li];
+    if(skipLine(line))continue;
+    var em=line.match(/^Event\s+(\d+)\s+(Women|Men|Mixed)\s+(.+)/i);
+    if(em){
+      cur={num:parseInt(em[1]),gender:em[2].charAt(0).toUpperCase()+em[2].slice(1).toLowerCase(),
+           name:em[3].trim(),isRelay:/relay/i.test(em[3]),entries:[],active:true,day:1};
+      events.push(cur);sc=0;continue;
+    }
+    if(!cur)continue;
+    var tok=line.split(/\s+/);
+    if(tok.length<3||!/^\d+$/.test(tok[0]))continue;
+    var place=parseInt(tok[0]);if(place<=0)continue;
+    if(cur.isRelay){
+      var last=tok[tok.length-1],sl=tok[tok.length-2];
+      if(!isTime(last)||!STD[sl.toUpperCase()])continue;
+      var team=tok.slice(1,tok.length-2).join(' ');
+      if(!team)continue;
+      sc++;cur.entries.push({seedPlace:sc,name:team+' Relay',year:'',team:team,std:sl,seedTime:last});tot++;
+    } else {
+      var ei=-1;
+      for(var ti=1;ti<tok.length;ti++){if(ELIG[tok[ti].toUpperCase()]){ei=ti;break;}}
+      if(ei<0)continue;
+      var si=-1;
+      for(var ti2=ei+1;ti2<tok.length;ti2++){if(STD[tok[ti2].toUpperCase()]){si=ti2;break;}}
+      if(si<0){if(isTime(tok[tok.length-1])&&STD[tok[tok.length-2].toUpperCase()])si=tok.length-2;}
+      if(si<0)continue;
+      var nm=tok.slice(1,ei).join(' '),tm=tok.slice(ei+1,si).join(' ');
+      if(!nm||!tm)continue;
+      sc++;cur.entries.push({seedPlace:sc,name:nm,year:tok[ei].toUpperCase(),team:tm,std:tok[si],seedTime:tok[si+1]||''});tot++;
+    }
+  }
+  if(!events.length){showSt('No events found. Check format: "Event 1 Women 500 Freestyle"','err');return;}
+  var ts={};
+  events.forEach(function(ev){ev.entries.forEach(function(en){if(en.team)ts[en.team]=1;});});
+  S.events=events;S.teams=Object.keys(ts).sort();S.activeTeams=S.teams.slice();S.liveResults={};
+  autoDays();
+  showSt('Loaded: '+events.length+' events, '+tot+' entries, '+S.teams.length+' teams','ok');
+  document.getElementById('pps').style.display='block';
+  renderSetup();save();
+}
+
+function autoDays(){
+  // Auto-assign days based on common D3 championship patterns
+  var dayMap={};
+  S.events.forEach(function(ev){
+    var n=ev.num;
+    // Typical D3 championship day assignments based on event number patterns
+    if([1,2,3,4,5,6,7,8].indexOf(n%40)>=0||n<=8)ev.day=1;
+    else if([9,10,11,12,13,14,15,16,17,18].some(function(x){return n%40===x||(n>=9&&n<=18);}))ev.day=2;
+  });
+  // Simple heuristic: split events into 4 roughly equal days
+  var evNums=S.events.map(function(ev){return ev.num;}).sort(function(a,b){return a-b;});
+  var q=Math.ceil(evNums.length/4);
+  S.events.forEach(function(ev){
+    var idx=evNums.indexOf(ev.num);
+    ev.day=Math.min(4,Math.floor(idx/q)+1);
+  });
+}
+
+// ── SETUP RENDER ──────────────────────────────────────────────────────────
+function renderSetup(){renderTmCl();renderEvCl();}
+
+function renderTmCl(){
+  var h='';
+  S.teams.forEach(function(t){
+    var chk=S.activeTeams.indexOf(t)>=0?'checked':'';
+    h+='<label class="ci"><input type="checkbox" '+chk+' onchange="togTm(\''+esc(t)+'\',this.checked)"><span>'+esc(t)+'</span></label>';
+  });
+  document.getElementById('tc').innerHTML=h;
+}
+
+function renderEvCl(){
+  var h='';
+  S.events.forEach(function(ev,i){
+    var chk=ev.active?'checked':'';
+    h+='<label class="ci">';
+    h+='<input type="checkbox" '+chk+' onchange="togEv('+i+',this.checked)">';
+    h+='<span style="flex:1">E'+ev.num+' '+ev.gender+' '+ev.name+'</span>';
+    h+='<select style="width:58px;padding:2px 4px;font-size:.7rem" onchange="setDay('+i+',this.value)">';
+    [1,2,3,4].forEach(function(d){
+      h+='<option value="'+d+'"'+(ev.day===d?' selected':'')+'>D'+d+'</option>';
+    });
+    h+='</select></label>';
+  });
+  document.getElementById('ec').innerHTML=h;
+}
+
+function setAllTm(on){S.activeTeams=on?S.teams.slice():[];renderTmCl();save();}
+function togTm(t,on){if(on){if(S.activeTeams.indexOf(t)<0)S.activeTeams.push(t);}else{S.activeTeams=S.activeTeams.filter(function(x){return x!==t;});}save();}
+function togEv(i,on){S.events[i].active=on;save();}
+function setDay(i,d){S.events[i].day=parseInt(d);save();}
+function clearAll(){if(confirm('Clear all data?')){S.events=[];S.teams=[];S.activeTeams=[];S.liveResults={};document.getElementById('pps').style.display='none';renderSetup();save();showSt('Cleared.','ok');}}
+
+// ── SCORING UTILS ─────────────────────────────────────────────────────────
+function mpts(isRelay){var m=MDL[S.scoringModel]||MDL.ncaa;return isRelay?m.rel:m.ind;}
+
+function actEvs(df){
+  var day=df||S.session;
+  return S.events.filter(function(ev){
+    if(!ev.active)return false;
+    if(day==='full')return true;
+    return ev.day===parseInt(day.replace('day',''));
+  });
+}
+
+function evGrp(name,isRelay){
+  if(isRelay)return'relays';
+  var n=name.toLowerCase();
+  if(/im|individual medley|400 medley/.test(n))return'im';
+  if(/backstroke|back/.test(n))return'back';
+  if(/breaststroke|breast/.test(n))return'breast';
+  if(/butterfly|fly/.test(n))return'fly';
+  if(/50 free|100 free/.test(n))return'sprints';
+  if(/freestyle|free/.test(n))return'distance';
+  return'sprints';
+}
+
+function calcProj(df){
+  var evs=actEvs(df);
+  var res={};
+  S.activeTeams.forEach(function(t){res[t]={total:0,sprints:0,distance:0,im:0,back:0,breast:0,fly:0,relays:0};});
+  evs.forEach(function(ev){
+    var pts=mpts(ev.isRelay);
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    // Score against full field, credit only active teams
+    var rank=0;
+    var i=0;
+    while(i<entries.length&&rank<pts.length){
+      // Handle ties
+      var j=i+1;
+      while(j<entries.length&&entries[j].seedTime===entries[i].seedTime&&entries[i].seedTime!=='')j++;
+      var tieCount=j-i;
+      var psum=0;for(var k=rank;k<Math.min(rank+tieCount,pts.length);k++)psum+=pts[k];
+      var sp=psum/tieCount;
+      for(var k=i;k<j;k++){
+        var team=entries[k].team;
+        if(res[team]!==undefined&&rank<pts.length){
+          var grp=evGrp(ev.name,ev.isRelay);
+          res[team][grp]+=sp;
+          res[team].total+=sp;
+        }
+      }
+      rank+=tieCount;
+      i=j;
+    }
+  });
+  return res;
+}
+
+// ── PROJECTIONS TAB ───────────────────────────────────────────────────────
+function srt(col){
+  if(S.sortCol===col)S.sortDir=S.sortDir==='asc'?'desc':'asc';
+  else{S.sortCol=col;S.sortDir=col==='team'?'asc':'desc';}
+  save();renderProj();
+}
+
+function renderProj(){
+  if(!S.events.length){document.getElementById('pe').style.display='block';document.getElementById('pc').style.display='none';return;}
+  document.getElementById('pe').style.display='none';document.getElementById('pc').style.display='block';
+  var proj=calcProj(S.projSession),home=S.homeTeam;
+  var rows=[];
+  Object.keys(proj).forEach(function(t){rows.push(Object.assign({team:t},proj[t]));});
+  rows.sort(function(a,b){
+    var av=a[S.sortCol],bv=b[S.sortCol];
+    if(S.sortDir==='asc')return typeof av==='string'?av.localeCompare(bv):av-bv;
+    return typeof av==='string'?bv.localeCompare(av):bv-av;
+  });
+  var mx=0;rows.forEach(function(r){if(r.total>mx)mx=r.total;});if(mx===0)mx=1;
+  var h='';
+  rows.forEach(function(r,i){
+    var ih=r.team===home;
+    var rc=i===0?'r1':i===1?'r2':i===2?'r3':'rx';
+    var pct=(r.total/mx*100).toFixed(1);
+    h+='<tr class="'+(ih?'ht':'')+'">';
+    h+='<td><span class="rb '+rc+'">'+(i+1)+'</span></td>';
+    h+='<td>'+esc(r.team)+(ih?' &#127968;':'')+'</td>';
+    h+='<td><strong>'+r.total.toFixed(1)+'</strong><div style="background:var(--bg3);height:5px;border-radius:3px;margin-top:3px;overflow:hidden"><div style="background:var(--gold);height:100%;width:'+pct+'%;border-radius:3px"></div></div></td>';
+    h+='<td>'+r.sprints.toFixed(1)+'</td>';
+    h+='<td>'+r.distance.toFixed(1)+'</td>';
+    h+='<td>'+(r.back||0).toFixed(1)+'</td>';
+    h+='<td>'+(r.breast||0).toFixed(1)+'</td>';
+    h+='<td>'+(r.fly||0).toFixed(1)+'</td>';
+    h+='<td>'+r.im.toFixed(1)+'</td>';
+    h+='<td>'+r.relays.toFixed(1)+'</td>';
+    h+='</tr>';
+  });
+  document.getElementById('ptb').innerHTML=h;
+  // Update sort indicators
+  document.querySelectorAll('#pt2 th').forEach(function(th){
+    th.classList.remove('sa','sd');
+    var m=th.getAttribute('onclick')&&th.getAttribute('onclick').match(/'([^']+)'/);
+    if(m&&m[1]===S.sortCol)th.classList.add(S.sortDir==='asc'?'sa':'sd');
+  });
+
+  // Event breakdown — always visible, updates with session filter
+  document.getElementById('pev').style.display='block';
+  renderEvBreakdown(rows.map(function(r){return r.team;}), S.projSession);
+}
+
+function renderEvBreakdown(teamOrder, session){
+  var evs=actEvs(session);
+  var evScores=[];
+  evs.forEach(function(ev){
+    var pts=mpts(ev.isRelay);
+    var sc={};teamOrder.forEach(function(t){sc[t]=0;});
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var rank=0,i=0;
+    while(i<entries.length&&rank<pts.length){
+      var j=i+1;
+      while(j<entries.length&&j<pts.length&&entries[j].seedTime===entries[i].seedTime&&entries[i].seedTime!=='')j++;
+      var tieCount=j-i;
+      var psum=0;for(var k=rank;k<Math.min(rank+tieCount,pts.length);k++)psum+=pts[k];
+      var sp=psum/tieCount;
+      for(var k=i;k<j;k++){if(sc[entries[k].team]!==undefined&&rank<pts.length)sc[entries[k].team]+=sp;}
+      rank+=tieCount;i=j;
+    }
+    evScores.push({ev:ev,sc:sc});
+  });
+  var label=session==='full'?'All Events':session==='day1'?'Day 1':session==='day2'?'Day 2':session==='day3'?'Day 3':'Day 4';
+  document.getElementById('pevt').textContent=label.toUpperCase()+' — Event-by-Event Breakdown';
+  var hdr='<th style="white-space:nowrap">Event</th>';
+  teamOrder.forEach(function(t){hdr+='<th style="white-space:nowrap">'+esc(t)+'</th>';});
+  document.getElementById('pevhdr').innerHTML=hdr;
+  var bh='';
+  evScores.forEach(function(item){
+    var bestPts=0;
+    teamOrder.forEach(function(t){if((item.sc[t]||0)>bestPts)bestPts=item.sc[t]||0;});
+    bh+='<tr>';
+    bh+='<td style="font-size:.75rem;white-space:nowrap;font-family:var(--fm)">E'+item.ev.num+' '+esc(item.ev.name)+'</td>';
+    teamOrder.forEach(function(t){
+      var v=item.sc[t]||0;
+      var isBest=v>0&&v===bestPts;
+      bh+='<td style="'+(isBest?'color:var(--gold);font-weight:700':v>0?'':'color:var(--text-dim)')+'">'+(v>0?v.toFixed(1):'—')+'</td>';
+    });
+    bh+='</tr>';
+  });
+  bh+='<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--bg3)"><td>TOTAL</td>';
+  teamOrder.forEach(function(t){
+    var tot=0;evScores.forEach(function(item){tot+=item.sc[t]||0;});
+    bh+='<td>'+tot.toFixed(1)+'</td>';
+  });
+  bh+='</tr>';
+  document.getElementById('pevbd').innerHTML=bh;
+}
+
+// ── DEPTH TAB ─────────────────────────────────────────────────────────────
+function renderDepthSetup(){
+  if(!S.events.length){document.getElementById('de').style.display='block';document.getElementById('dc2').style.display='none';return;}
+  document.getElementById('de').style.display='none';document.getElementById('dc2').style.display='block';
+
+  var n=parseInt(document.getElementById('dtn').value)||2;
+  // Ensure S.depthTeams array exists and has n slots
+  if(!S.depthTeams)S.depthTeams=[];
+  while(S.depthTeams.length<n)S.depthTeams.push(S.activeTeams[S.depthTeams.length]||'');
+  S.depthTeams=S.depthTeams.slice(0,n);
+
+  // Build team selectors
+  var sh='';
+  for(var i=0;i<n;i++){
+    var cur=S.depthTeams[i]||S.activeTeams[i]||'';
+    var opts='';
+    S.activeTeams.forEach(function(t){opts+='<option value="'+esc(t)+'"'+(t===cur?' selected':'')+'>'+esc(t)+'</option>';});
+    sh+='<div class="fg1" style="max-width:180px"><label>Team '+(i+1)+'</label>';
+    sh+='<select onchange="setDepthTeam('+i+',this.value)">'+opts+'</select></div>';
+  }
+  document.getElementById('dtselectors').innerHTML=sh;
+
+  // Set grid columns based on n
+  var cols=n<=2?'1fr 1fr':n===3?'1fr 1fr 1fr':n<=4?'1fr 1fr 1fr 1fr':'1fr 1fr 1fr 1fr 1fr';
+  document.getElementById('dbarcharts').style.gridTemplateColumns=cols;
+
+  renderDepth();
+}
+
+function setDepthTeam(i,v){
+  if(!S.depthTeams)S.depthTeams=[];
+  S.depthTeams[i]=v;
+  save();renderDepth();
+}
+
+function renderDepth(){
+  if(!S.depthTeams||!S.depthTeams.length)return;
+  var teams=S.depthTeams;
+  var proj=calcProj('full');
+  var grps=[{k:'sprints',l:'Sprints',c:'bs'},{k:'distance',l:'Free',c:'bd'},{k:'back',l:'Back',c:'bb'},{k:'breast',l:'Breast',c:'bbr'},{k:'fly',l:'Fly',c:'bfl'},{k:'im',l:'IM',c:'bi'},{k:'relays',l:'Relays',c:'br'}];
+
+  // Global max across all teams and groups for consistent bar scaling
+  var mv=0;
+  teams.forEach(function(t){
+    var p=proj[t]||{};
+    grps.forEach(function(g){if((p[g.k]||0)>mv)mv=p[g.k]||0;});
+  });
+  if(mv===0)mv=1;
+
+  // Count scoring entries per group per team
+  function grpCounts(team){
+    var counts={};
+    grps.forEach(function(g){counts[g.k]=0;});
+    S.events.forEach(function(ev){
+      if(!ev.active)return;
+      var grp=evGrp(ev.name,ev.isRelay);
+      var pts=mpts(ev.isRelay);
+      var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+      entries.forEach(function(en,idx){if(en.team===team&&idx<pts.length)counts[grp]++;});
+    });
+    return counts;
+  }
+
+  // Render bar chart cards
+  var chartHtml='';
+  teams.forEach(function(team){
+    var d=proj[team]||{};
+    var cnt=grpCounts(team);
+    var ch='';
+    grps.forEach(function(g){
+      var v=d[g.k]||0,n=cnt[g.k]||0,pct=(v/mv*100).toFixed(1);
+      ch+='<div class="dr">';
+      ch+='<div class="dl">'+g.l+'</div>';
+      ch+='<div class="dbw"><div class="db '+g.c+'" style="width:'+pct+'%">'+(v>0?v.toFixed(0):'')+'</div></div>';
+      ch+='<div class="dp" style="width:80px;text-align:right">'+v.toFixed(1)+(n>0?'<span style="font-size:.65rem;opacity:.8;margin-left:3px">('+n+')</span>':'')+'</div>';
+      ch+='</div>';
+    });
+    // Leads and zeros
+    var leads=[],zeros=[];
+    S.events.forEach(function(ev){
+      if(!ev.active)return;
+      var pts=mpts(ev.isRelay);
+      var ord=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+      var rk=-1;for(var ri=0;ri<ord.length;ri++){if(ord[ri].team===team){rk=ri;break;}}
+      var lbl='E'+ev.num+' '+ev.name;
+      if(rk===0)leads.push(lbl);
+      if(rk<0||rk>=pts.length)zeros.push(lbl);
+    });
+    var lh=leads.length?leads.map(function(l){return'<div class="fi ff">&#127947; '+esc(l)+'</div>';}).join(''):'<div style="color:var(--text-dim);font-size:.75rem">None</div>';
+    var zh=zeros.length?zeros.map(function(l){return'<div class="fi fz">&#10007; '+esc(l)+'</div>';}).join(''):'<div style="color:var(--text-dim);font-size:.75rem">None</div>';
+    chartHtml+='<div class="card"><div class="ct">'+esc(team)+'</div>';
+    chartHtml+=ch;
+    chartHtml+='<hr class="dv">';
+    chartHtml+='<div style="font-family:var(--fm);font-size:.7rem;color:var(--text-dim);margin-bottom:.5rem">PROJECTED 1ST IN:</div><div class="fl">'+lh+'</div>';
+    chartHtml+='<div style="font-family:var(--fm);font-size:.7rem;color:var(--text-dim);margin:.8rem 0 .5rem">SCORES ZERO IN:</div><div class="fl">'+zh+'</div>';
+    chartHtml+='</div>';
+  });
+  document.getElementById('dbarcharts').innerHTML=chartHtml;
+
+  // Event-by-event table
+  document.getElementById('devt').textContent='Event-by-Event Comparison';
+  var hdr='<th>Event</th>';
+  teams.forEach(function(t){hdr+='<th style="white-space:nowrap">'+esc(t)+'</th>';});
+  document.getElementById('devhdr').innerHTML=hdr;
+
+  var totals={};teams.forEach(function(t){totals[t]=0;});
+  var bh='';
+  S.events.forEach(function(ev){
+    if(!ev.active)return;
+    var pts=mpts(ev.isRelay);
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    function teamPts(team){
+      var sc=0,rank=0,i=0;
+      while(i<entries.length&&rank<pts.length){
+        var j=i+1;
+        while(j<entries.length&&j<pts.length&&entries[j].seedTime===entries[i].seedTime&&entries[i].seedTime!=='')j++;
+        var tieCount=j-i;
+        var psum=0;for(var k=rank;k<Math.min(rank+tieCount,pts.length);k++)psum+=pts[k];
+        var sp=psum/tieCount;
+        for(var k=i;k<j;k++){if(entries[k].team===team&&rank<pts.length)sc+=sp;}
+        rank+=tieCount;i=j;
+      }
+      return sc;
+    }
+    var tpts={};var bestPts=0;
+    teams.forEach(function(t){tpts[t]=teamPts(t);if(tpts[t]>bestPts)bestPts=tpts[t];});
+    bh+='<tr><td style="font-size:.75rem;white-space:nowrap;font-family:var(--fm)">E'+ev.num+' '+esc(ev.name)+'</td>';
+    teams.forEach(function(t){
+      var v=tpts[t];
+      var isBest=v>0&&v===bestPts;
+      bh+='<td style="'+(isBest?'color:var(--gold);font-weight:700':v===0?'color:var(--text-dim)':'')+'">'+(v>0?v.toFixed(1):'—')+'</td>';
+      totals[t]+=v;
+    });
+    bh+='</tr>';
+  });
+  // Totals row
+  var bestTotal=0;teams.forEach(function(t){if(totals[t]>bestTotal)bestTotal=totals[t];});
+  bh+='<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--bg3)"><td>TOTAL</td>';
+  teams.forEach(function(t){
+    bh+='<td style="'+(totals[t]===bestTotal?'color:var(--gold)':'')+'">'+totals[t].toFixed(1)+'</td>';
+  });
+  bh+='</tr>';
+  document.getElementById('devbd').innerHTML=bh;
+}
+
+// ── LIVE TAB ──────────────────────────────────────────────────────────────
+function renderLive(){
+  if(!S.events.length){document.getElementById('le').style.display='block';document.getElementById('lc').style.display='none';return;}
+  document.getElementById('le').style.display='none';document.getElementById('lc').style.display='block';
+  renderLiveEvs();updLB();updClinch();
+}
+
+function renderLiveEvs(){
+  var evs=actEvs(S.liveSession),h='';
+  evs.forEach(function(ev){
+    var gi=S.events.indexOf(ev);
+    var res=S.liveResults[gi]||[];
+    var any=false;for(var ri=0;ri<res.length;ri++){if(res[ri]&&res[ri].team){any=true;break;}}
+    var pts=mpts(ev.isRelay);
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var prows='';
+    prows+='<div class="pr" style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim)"><span>PL</span><span>Result</span><span>Psych</span><span>Scr</span></div>';
+    for(var rk=0;rk<pts.length;rk++){
+      var r=res[rk]||{},ps=entries[rk]||{};
+      var tm=r.team!==undefined?r.team:(ps.team||'');
+      var sc2=r.scratch?'checked':'';
+      var opts='<option value="">—</option>';
+      S.activeTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
+      prows+='<div class="pr">';
+      prows+='<span class="pn">'+(rk+1)+'</span>';
+      prows+='<select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>';
+      prows+='<span style="color:var(--text-dim);font-size:.7rem">'+esc(ps.team||'—')+'</span>';
+      prows+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"> SCR</label>';
+      prows+='</div>';
+    }
+    var stcls=any?'partial':'pending';
+    var tagcls=ev.isRelay?'tgr':'tgi';
+    h+='<div class="ea" id="ea'+gi+'">';
+    h+='<div class="ehr '+stcls+'" id="eh'+gi+'" onclick="togAcc('+gi+')">';
+    h+='<span class="en">E'+ev.num+'</span>';
+    h+='<span class="enm">'+ev.gender+' '+ev.name+'</span>';
+    h+='<span class="tag '+tagcls+'">'+(ev.isRelay?'RELAY':'IND')+'</span>';
+    h+='<span class="epb" id="epb'+gi+'">'+(any?'partial':'pending')+'</span>';
+    h+='<span style="color:var(--text-dim);font-size:.8rem">&#9662;</span>';
+    h+='</div>';
+    h+='<div class="eb" id="eb'+gi+'">';
+    h+='<div class="pg">'+prows+'</div>';
+    h+='<div style="margin-top:.8rem"><button class="btn bsm" onclick="mkDone('+gi+')">Mark Done</button> <button class="btn bto bsm" onclick="clrEv('+gi+')">Clear</button></div>';
+    h+='</div></div>';
+  });
+  document.getElementById('lev').innerHTML=h;
+}
+
+function togAcc(gi){var b=document.getElementById('eb'+gi);if(b)b.classList.toggle('open');}
+
+function setLR(gi,rk,f,v){
+  if(!S.liveResults[gi])S.liveResults[gi]=[];
+  if(!S.liveResults[gi][rk])S.liveResults[gi][rk]={};
+  S.liveResults[gi][rk][f]=v;
+  save();updLB();updClinch();
+  var eh=document.getElementById('eh'+gi);
+  if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('partial');}
+}
+
+function mkDone(gi){
+  var ev=S.events[gi];
+  if(!ev)return;
+  // Auto-fill results from psych sheet seed order if not already entered
+  var pts=mpts(ev.isRelay);
+  var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+  if(!S.liveResults[gi])S.liveResults[gi]=[];
+  for(var rk=0;rk<pts.length;rk++){
+    // Only auto-fill slots not already manually set
+    if(!S.liveResults[gi][rk]||!S.liveResults[gi][rk].team){
+      var en=entries[rk];
+      S.liveResults[gi][rk]=en?{team:en.team,scratch:false}:{team:'',scratch:false};
+    }
+  }
+  save();
+  // Update visual status
+  var eh=document.getElementById('eh'+gi);if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('done');}
+  var epb=document.getElementById('epb'+gi);if(epb)epb.textContent='\u2713 done';
+  // Re-render event row so dropdowns reflect auto-filled values
+  renderLiveEvs();updLB();updClinch();
+}
+
+function clrEv(gi){delete S.liveResults[gi];save();renderLiveEvs();updLB();updClinch();}
+
+function liveScores(){
+  var sc={};
+  S.activeTeams.forEach(function(t){sc[t]=0;});
+  Object.keys(S.liveResults).forEach(function(gis){
+    var gi=parseInt(gis),ev=S.events[gi];
+    if(!ev||!ev.active)return;
+    var pts=mpts(ev.isRelay),res=S.liveResults[gi],rk=0;
+    res.forEach(function(x){
+      if(!x||x.scratch||!x.team)return;
+      if(rk<pts.length&&sc[x.team]!==undefined){sc[x.team]+=pts[rk];rk++;}
+    });
+  });
+  return sc;
+}
+
+function finalCounts(){
+  // Count seed-based final appearances per team across all active events
+  var counts={};
+  S.activeTeams.forEach(function(t){counts[t]={a:0,b:0,c:0};});
+  S.events.forEach(function(ev){
+    if(!ev.active||ev.isRelay)return; // only individual events have A/B/C finals
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    entries.forEach(function(en,idx){
+      if(!counts[en.team])return;
+      var place=idx+1;
+      if(place<=8)counts[en.team].a++;
+      else if(place<=16)counts[en.team].b++;
+      else if(place<=24)counts[en.team].c++;
+    });
+  });
+  return counts;
+}
+
+function updFinalsBreakdown(){
+  var sc=liveScores();
+  var teams=Object.keys(sc).sort(function(a,b){return sc[b]-sc[a];});
+  var evs=actEvs(S.liveSession).filter(function(ev){return !ev.isRelay;}); // individual only
+
+  // Build per-event A/B/C counts from actual liveResults
+  var rows=[];
+  var anyEntered=false;
+  evs.forEach(function(ev){
+    var gi=S.events.indexOf(ev);
+    var res=S.liveResults[gi];
+    if(!res||!res.some(function(x){return x&&x.team;}))return;
+    anyEntered=true;
+    var teamCounts={};
+    teams.forEach(function(t){teamCounts[t]={a:0,b:0,c:0};});
+    res.forEach(function(x,rk){
+      if(!x||x.scratch||!x.team)return;
+      if(!teamCounts[x.team])return;
+      if(rk<8)teamCounts[x.team].a++;
+      else if(rk<16)teamCounts[x.team].b++;
+      else if(rk<24)teamCounts[x.team].c++;
+    });
+    rows.push({ev:ev,tc:teamCounts});
+  });
+
+  // Build header: Event | TeamA (A/B/C) | TeamB (A/B/C) | ...
+  var hdr='<th>Event</th>';
+  teams.forEach(function(t){
+    hdr+='<th colspan="3" style="text-align:center;border-left:1px solid var(--border)">'+esc(t)+'</th>';
+  });
+  hdr+='</tr><tr><th></th>';
+  teams.forEach(function(){
+    hdr+='<th style="color:var(--gold);border-left:1px solid var(--border)">A</th>';
+    hdr+='<th style="color:#a8a9ac">B</th>';
+    hdr+='<th style="color:#c07d3a">C</th>';
+  });
+  document.getElementById('lfinhdr').innerHTML=hdr;
+
+  if(!anyEntered){
+    document.getElementById('lfinbd').innerHTML='<tr><td colspan="99" style="color:var(--text-dim);text-align:center;padding:1.5rem">No results entered yet.</td></tr>';
+    return;
+  }
+
+  var bh='';
+  rows.forEach(function(row){
+    bh+='<tr>';
+    bh+='<td style="font-size:.75rem;white-space:nowrap;font-family:var(--fm)">E'+row.ev.num+' '+esc(row.ev.name)+'</td>';
+    teams.forEach(function(t){
+      var f=row.tc[t]||{a:0,b:0,c:0};
+      bh+='<td style="font-family:var(--fm);color:var(--gold);border-left:1px solid var(--border)">'+(f.a||'—')+'</td>';
+      bh+='<td style="font-family:var(--fm);color:#a8a9ac">'+(f.b||'—')+'</td>';
+      bh+='<td style="font-family:var(--fm);color:#c07d3a">'+(f.c||'—')+'</td>';
+    });
+    bh+='</tr>';
+  });
+
+  // Totals row
+  bh+='<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--bg3)"><td>TOTAL</td>';
+  teams.forEach(function(t){
+    var ta=0,tb=0,tc2=0;
+    rows.forEach(function(row){var f=row.tc[t]||{a:0,b:0,c:0};ta+=f.a;tb+=f.b;tc2+=f.c;});
+    bh+='<td style="color:var(--gold);border-left:1px solid var(--border)">'+(ta||'—')+'</td>';
+    bh+='<td style="color:#a8a9ac">'+(tb||'—')+'</td>';
+    bh+='<td style="color:#c07d3a">'+(tc2||'—')+'</td>';
+  });
+  bh+='</tr>';
+  document.getElementById('lfinbd').innerHTML=bh;
+}
+
+function updLiveBreakdown(){
+  var home=S.homeTeam;
+  var sc=liveScores();
+  var teams=Object.keys(sc).sort(function(a,b){return sc[b]-sc[a];}); // sorted by points
+  var evs=actEvs(S.liveSession);
+
+  // Build per-event actual scored points from liveResults
+  var evScores=[];
+  evs.forEach(function(ev){
+    var gi=S.events.indexOf(ev);
+    var res=S.liveResults[gi];
+    var teamPts={};teams.forEach(function(t){teamPts[t]=0;});
+    if(res){
+      var pts=mpts(ev.isRelay);
+      var rk=0;
+      res.forEach(function(x){
+        if(!x||x.scratch||!x.team)return;
+        if(rk<pts.length&&teamPts[x.team]!==undefined){teamPts[x.team]+=pts[rk];rk++;}
+      });
+    }
+    evScores.push({ev:ev,sc:teamPts,entered:!!res&&res.some(function(x){return x&&x.team;})});
+  });
+
+  // Header
+  var hdr='<th style="white-space:nowrap">Event</th>';
+  teams.forEach(function(t){
+    hdr+='<th style="white-space:nowrap'+(t===home?';color:var(--gold)':'')+'">'
+      +esc(t)+(t===home?' &#127968;':'')+'</th>';
+  });
+  document.getElementById('lebhdr').innerHTML=hdr;
+
+  // Rows — only show events that have at least one result entered
+  var bh='';
+  var anyEntered=false;
+  evScores.forEach(function(item){
+    if(!item.entered)return;
+    anyEntered=true;
+    var bestPts=0;teams.forEach(function(t){if((item.sc[t]||0)>bestPts)bestPts=item.sc[t]||0;});
+    bh+='<tr>';
+    bh+='<td style="font-size:.75rem;white-space:nowrap;font-family:var(--fm)">E'+item.ev.num+' '+esc(item.ev.name)+'</td>';
+    teams.forEach(function(t){
+      var v=item.sc[t]||0;
+      var isBest=v>0&&v===bestPts;
+      bh+='<td style="'+(isBest?'color:var(--gold);font-weight:700':v>0?'':'color:var(--text-dim)')+'">'+(v>0?v.toFixed(0):'—')+'</td>';
+    });
+    bh+='</tr>';
+  });
+
+  if(!anyEntered){
+    bh='<tr><td colspan="99" style="color:var(--text-dim);text-align:center;padding:1.5rem">No results entered yet.</td></tr>';
+  } else {
+    // Totals row
+    bh+='<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--bg3)"><td>TOTAL</td>';
+    teams.forEach(function(t){
+      bh+='<td>'+sc[t].toFixed(0)+'</td>';
+    });
+    bh+='</tr>';
+  }
+  document.getElementById('lebbd').innerHTML=bh;
+}
+
+function updLB(){
+  var sc=liveScores(),home=S.homeTeam;
+  var fc=finalCounts();
+  var rows=Object.keys(sc).map(function(t){return[t,sc[t]];}).sort(function(a,b){return b[1]-a[1];});
+  var h='';
+  rows.forEach(function(row,i){
+    var t=row[0],p=row[1],ih=t===home;
+    var rc=i===0?'r1':i===1?'r2':i===2?'r3':'rx';
+    var f=fc[t]||{a:0,b:0,c:0};
+    h+='<tr class="'+(ih?'ht':'')+'">';
+    h+='<td><span class="rb '+rc+'">'+(i+1)+'</span></td>';
+    h+='<td>'+esc(t)+(ih?' &#127968;':'')+'</td>';
+    h+='<td><strong>'+p.toFixed(1)+'</strong></td>';
+    h+='<td style="font-family:var(--fm);color:var(--gold)">'+(f.a||'—')+'</td>';
+    h+='<td style="font-family:var(--fm);color:#a8a9ac">'+(f.b||'—')+'</td>';
+    h+='<td style="font-family:var(--fm);color:#c07d3a">'+(f.c||'—')+'</td>';
+    h+='</tr>';
+  });
+  document.getElementById('ltb').innerHTML=h;
+  updLiveBreakdown();
+  updFinalsBreakdown();
+}
+
+function updClinch(){
+  var sc=liveScores(),home=S.homeTeam,hs=sc[home]||0;
+  var rivals=Object.keys(sc).filter(function(t){return t!==home;}).map(function(t){return[t,sc[t]];}).sort(function(a,b){return b[1]-a[1];});
+  var rn=rivals.length?rivals[0][0]:'Rival',rs=rivals.length?rivals[0][1]:0;
+  var done={};
+  Object.keys(S.liveResults).forEach(function(gi){done[parseInt(gi)]=1;});
+  var rem=actEvs('full').filter(function(ev){return!done[S.events.indexOf(ev)];});
+  var avail=0;rem.forEach(function(ev){var p=mpts(ev.isRelay);avail+=p[0]||0;});
+  document.getElementById('avail').textContent=avail.toFixed(0)+' pts';
+  var gap=hs-rs;
+  var el=document.getElementById('clinch');
+  var msg='';
+  if(gap>avail){msg='&#9989; '+home+' clinches! Lead: +'+gap.toFixed(1);el.className='cb cw';}
+  else if(gap>0){msg='&#128994; '+home+' leads '+rn+' by '+gap.toFixed(1)+' pts';el.className='cb cn';}
+  else if(gap===0&&hs===0){msg='&#9203; Meet not started';el.className='cb cn';}
+  else{msg='&#128308; '+home+' trails '+rn+' by '+Math.abs(gap).toFixed(1)+' pts';el.className='cb cl2';}
+  el.innerHTML=msg;
+}
+
+// ── UTILS ─────────────────────────────────────────────────────────────────
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function showSt(msg,type){var el=document.getElementById('ps');el.textContent=msg;el.className='st '+type;}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+
+function init(){
+  load();
+  document.getElementById('pfu').addEventListener('change',function(){
+    if(this.files[0])handlePDF(this.files[0]);
+  });
+  document.getElementById('mn').value=S.meetName||'';
+  document.getElementById('md').value=S.meetDate||'';
+  document.getElementById('ht').value=S.homeTeam||'Emory';
+  document.getElementById('sm').value=S.scoringModel||'uaa';
+  if(S.meetName){document.getElementById('hmeta').textContent=S.meetName+(S.meetDate?' · '+S.meetDate:'');}
+  // Restore session pill states
+  document.querySelectorAll('#ssp .pill').forEach(function(p){p.classList.remove('active');});
+  var sp=document.querySelector('#ssp .pill[onclick*="'+S.session+'"]');if(sp)sp.classList.add('active');
+  document.querySelectorAll('#psp .pill').forEach(function(p){p.classList.remove('active');});
+  var pp=document.querySelector('#psp .pill[onclick*="'+S.projSession+'"]');if(pp)pp.classList.add('active');
+  // Load preloaded psych if no saved events
+  if(!S.events||!S.events.length){
+    if(PRELOADED_PSYCH&&PRELOADED_PSYCH.events.length){
+      S.events=PRELOADED_PSYCH.events;
+      S.teams=PRELOADED_PSYCH.teams;
+      S.activeTeams=PRELOADED_PSYCH.teams.slice();
+      S.liveResults={};
+      autoDays();
+      showSt('Loaded: '+S.events.length+' events, '+S.teams.length+' teams (2025 NCAA D3 Women)','ok');
+      document.getElementById('pps').style.display='block';
+      renderSetup();
+      save();
+    }
+  } else {
+    document.getElementById('pps').style.display='block';
+    renderSetup();
+  }
+}
+
+var PRELOADED_PSYCH = {"events": [{"num": 1, "gender": "Women", "name": "500 Freestyle", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Brown, Quinn", "year": "JR", "team": "Denison", "std": "B", "seedTime": "4:47.51"}, {"seedPlace": 2, "name": "Garre, Natalie", "year": "FR", "team": "Bowdoin", "std": "B", "seedTime": "4:47.63"}, {"seedPlace": 3, "name": "Haag, Molly", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "4:49.17"}, {"seedPlace": 4, "name": "Caymaz, Bengisu", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "4:49.76"}, {"seedPlace": 5, "name": "Dunn, Madeleine", "year": "JR", "team": "Tufts", "std": "B", "seedTime": "4:49.80"}, {"seedPlace": 6, "name": "Marshall, Caitlin", "year": "SR", "team": "NYU", "std": "B", "seedTime": "4:51.78"}, {"seedPlace": 7, "name": "Robins, Clementine", "year": "SO", "team": "Williams", "std": "B", "seedTime": "4:52.21"}, {"seedPlace": 8, "name": "Helm, Penelope", "year": "GRAD", "team": "Emory", "std": "B", "seedTime": "4:52.67"}, {"seedPlace": 9, "name": "Roebuck, Carter", "year": "SO", "team": "Williams", "std": "B", "seedTime": "4:53.46"}, {"seedPlace": 10, "name": "Brown, Nora Lee", "year": "FR", "team": "Kenyon", "std": "B", "seedTime": "4:54.71"}, {"seedPlace": 11, "name": "Motekaitis, Elle", "year": "GRAD", "team": "NYU", "std": "B", "seedTime": "4:54.96"}, {"seedPlace": 12, "name": "liu, Meredith", "year": "JR", "team": "Emory", "std": "B", "seedTime": "4:55.04"}, {"seedPlace": 13, "name": "Wala, Aanya", "year": "SO", "team": "NYU", "std": "B", "seedTime": "4:56.24"}, {"seedPlace": 14, "name": "Kelley, Maeve", "year": "SO", "team": "Amherst", "std": "B", "seedTime": "4:56.42"}, {"seedPlace": 15, "name": "Codd, Lily", "year": "JR", "team": "Williams", "std": "B", "seedTime": "4:56.47"}, {"seedPlace": 16, "name": "Mitchell, Elodie", "year": "FR", "team": "Emory", "std": "B", "seedTime": "4:56.48"}, {"seedPlace": 17, "name": "Hosack, Molly", "year": "JR", "team": "UWEC", "std": "B", "seedTime": "4:56.51"}, {"seedPlace": 18, "name": "Katz, Chloe", "year": "SR", "team": "Middlebury", "std": "B", "seedTime": "4:57.04"}, {"seedPlace": 19, "name": "Spangler, Bethany", "year": "FR", "team": "NYU", "std": "B", "seedTime": "4:57.22"}, {"seedPlace": 20, "name": "Main, Morgan", "year": "JR", "team": "Emory", "std": "B", "seedTime": "4:57.23"}, {"seedPlace": 21, "name": "Muller, Emery", "year": "JR", "team": "NYU", "std": "B", "seedTime": "4:57.40"}, {"seedPlace": 22, "name": "Chtokolov, Daria", "year": "SO", "team": "NYU", "std": "B", "seedTime": "4:57.49"}, {"seedPlace": 23, "name": "Stone, Garin", "year": "JR", "team": "Wheaton MA", "std": "B", "seedTime": "4:57.77"}, {"seedPlace": 24, "name": "Kelley, Kyla", "year": "FR", "team": "Williams", "std": "B", "seedTime": "4:58.16"}, {"seedPlace": 25, "name": "Crane, Jessica", "year": "FR", "team": "MIT", "std": "B", "seedTime": "4:58.87"}, {"seedPlace": 26, "name": "Shaw, Kathryn", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "4:58.89"}, {"seedPlace": 27, "name": "Adler, Yan Yee", "year": "FR", "team": "MIT", "std": "B", "seedTime": "4:58.94"}, {"seedPlace": 28, "name": "Chatoor, Jada", "year": "SR", "team": "Emory", "std": "B", "seedTime": "4:58.97"}, {"seedPlace": 29, "name": "Boorjian, Natalie", "year": "SO", "team": "Emory", "std": "B", "seedTime": "4:59.26"}, {"seedPlace": 30, "name": "Wisner, Taryn", "year": "SR", "team": "Denison", "std": "B", "seedTime": "4:59.30"}, {"seedPlace": 31, "name": "Craig, Ava", "year": "SO", "team": "Swarthmore", "std": "B", "seedTime": "4:59.59"}, {"seedPlace": 32, "name": "Barrientos, Isabella", "year": "SR", "team": "Wash U. MO", "std": "B", "seedTime": "4:59.66"}, {"seedPlace": 33, "name": "Greenberg, Abigail", "year": "SO", "team": "Williams", "std": "B", "seedTime": "4:59.77"}, {"seedPlace": 34, "name": "Poe, Zoe", "year": "FR", "team": "Calvin", "std": "B", "seedTime": "4:59.98"}, {"seedPlace": 35, "name": "Er, Melissa", "year": "FR", "team": "Johns Hopkins", "std": "B", "seedTime": "5:00.00"}, {"seedPlace": 36, "name": "Swan, Katherine", "year": "SO", "team": "Emory", "std": "NS", "seedTime": "5:00.69"}, {"seedPlace": 37, "name": "Tropper, Stephanie", "year": "SR", "team": "Bates", "std": "NS", "seedTime": "5:00.88"}, {"seedPlace": 38, "name": "Richards, Lauren", "year": "SO", "team": "Chicago", "std": "NS", "seedTime": "5:01.44"}, {"seedPlace": 39, "name": "Susil, Meghan", "year": "SR", "team": "Johns Hopkins", "std": "NS", "seedTime": "5:01.44"}, {"seedPlace": 40, "name": "Berry, Ava", "year": "SO", "team": "Gettysburg", "std": "NS", "seedTime": "5:02.01"}, {"seedPlace": 41, "name": "Yazici, Ceyda", "year": "JR", "team": "Kenyon", "std": "NS", "seedTime": "5:02.45"}, {"seedPlace": 42, "name": "Rusk, Maren", "year": "SO", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "5:03.01"}, {"seedPlace": 43, "name": "Schraber, Erika", "year": "SO", "team": "Denison", "std": "NS", "seedTime": "5:03.14"}, {"seedPlace": 44, "name": "Daly, Sarah", "year": "SR", "team": "Emory", "std": "NS", "seedTime": "5:04.55"}, {"seedPlace": 45, "name": "Schmidt, Revere", "year": "SO", "team": "Claremont MS", "std": "NS", "seedTime": "5:09.33"}], "active": true, "day": 1}, {"num": 3, "gender": "Women", "name": "200 Individual Medley", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Verkleeren, Sophia", "year": "SR", "team": "Williams", "std": "B", "seedTime": "1:59.00"}, {"seedPlace": 2, "name": "Greeneway, Allison", "year": "FR", "team": "Emory", "std": "B", "seedTime": "2:00.28"}, {"seedPlace": 3, "name": "Augustyn, Kate", "year": "SR", "team": "MIT", "std": "B", "seedTime": "2:00.31"}, {"seedPlace": 4, "name": "Fadely, Jennah", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "2:01.50"}, {"seedPlace": 5, "name": "Gidley, Greta", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "2:01.59"}, {"seedPlace": 6, "name": "Wei, Gabriella", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "2:02.26"}, {"seedPlace": 7, "name": "Harris, Emily", "year": "JR", "team": "Denison", "std": "B", "seedTime": "2:02.56"}, {"seedPlace": 8, "name": "Crysel, Caitlin", "year": "FR", "team": "Emory", "std": "B", "seedTime": "2:02.62"}, {"seedPlace": 9, "name": "Burns, Neely", "year": "JR", "team": "Trinity U.", "std": "B", "seedTime": "2:02.95"}, {"seedPlace": 10, "name": "Yang, Irene", "year": "JR", "team": "Williams", "std": "B", "seedTime": "2:03.28"}, {"seedPlace": 11, "name": "Lynch, Calista", "year": "SO", "team": "NYU", "std": "B", "seedTime": "2:03.51"}, {"seedPlace": 12, "name": "Ferguson, Phoebe", "year": "JR", "team": "Denison", "std": "B", "seedTime": "2:03.52"}, {"seedPlace": 13, "name": "Mayfield, Mackenzie", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "2:03.57"}, {"seedPlace": 14, "name": "Appl, Emmie", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:03.59"}, {"seedPlace": 15, "name": "Durak, Anna", "year": "GRAD", "team": "Loras", "std": "B", "seedTime": "2:03.77"}, {"seedPlace": 16, "name": "Hermann, Katie", "year": "JR", "team": "Hope College", "std": "B", "seedTime": "2:03.91"}, {"seedPlace": 17, "name": "Weygandt, Quinn", "year": "JR", "team": "Swarthmore", "std": "B", "seedTime": "2:04.09"}, {"seedPlace": 18, "name": "Thielking, Drue", "year": "JR", "team": "Denison", "std": "B", "seedTime": "2:04.24"}, {"seedPlace": 19, "name": "McCallie, Sydney", "year": "GRAD", "team": "Salisbury", "std": "B", "seedTime": "2:04.33"}, {"seedPlace": 20, "name": "Dzieciol, Karolina", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:04.70"}, {"seedPlace": 21, "name": "McKenzie, Delanie", "year": "SO", "team": "Gettysburg", "std": "B", "seedTime": "2:05.15"}, {"seedPlace": 22, "name": "JOOS, SOPHIA", "year": "FR", "team": "Emory", "std": "B", "seedTime": "2:05.17"}, {"seedPlace": 23, "name": "Jones, Graeleigh", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:05.18"}, {"seedPlace": 24, "name": "Walsh, Elizabeth", "year": "JR", "team": "Bowdoin", "std": "B", "seedTime": "2:05.24"}, {"seedPlace": 25, "name": "Arnold, Paige", "year": "SO", "team": "Amherst", "std": "B", "seedTime": "2:05.42"}, {"seedPlace": 26, "name": "Tokuz, Zeynep", "year": "SO", "team": "NYU", "std": "B", "seedTime": "2:05.42"}, {"seedPlace": 27, "name": "Xu, Savannah", "year": "JR", "team": "CMU", "std": "B", "seedTime": "2:05.42"}, {"seedPlace": 28, "name": "McEver, Ella", "year": "SO", "team": "Chicago", "std": "B", "seedTime": "2:05.49"}, {"seedPlace": 29, "name": "Rank, Zoey", "year": "FR", "team": "UW-L", "std": "B", "seedTime": "2:05.54"}, {"seedPlace": 30, "name": "Boyer, Tess", "year": "SO", "team": "Wheaton IL", "std": "B", "seedTime": "2:05.65"}, {"seedPlace": 31, "name": "Stasz, sydney", "year": "SO", "team": "Tufts", "std": "B", "seedTime": "2:05.68"}, {"seedPlace": 32, "name": "Widmer, Ashlyn", "year": "SO", "team": "Kenyon", "std": "NS", "seedTime": "2:05.83"}, {"seedPlace": 33, "name": "Cohen, Katie", "year": "SO", "team": "Emory", "std": "NS", "seedTime": "2:05.99"}, {"seedPlace": 34, "name": "Van Eldik, Kelsey", "year": "FR", "team": "Kenyon", "std": "NS", "seedTime": "2:06.21"}, {"seedPlace": 35, "name": "Bream, Ollie", "year": "SR", "team": "Wooster", "std": "NS", "seedTime": "2:06.42"}, {"seedPlace": 36, "name": "Yoon, Isabelle", "year": "FR", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "2:06.47"}, {"seedPlace": 37, "name": "Herrera, Jordan", "year": "SR", "team": "Kenyon", "std": "NS", "seedTime": "2:06.73"}, {"seedPlace": 38, "name": "Groves, Ruby", "year": "JR", "team": "Williams", "std": "NS", "seedTime": "2:06.74"}, {"seedPlace": 39, "name": "Soosai, Alicia", "year": "JR", "team": "Chicago", "std": "NS", "seedTime": "2:06.87"}, {"seedPlace": 40, "name": "Jones, Kathryn", "year": "SO", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "2:07.05"}, {"seedPlace": 41, "name": "Byun, Sun Young", "year": "JR", "team": "Claremont MS", "std": "NS", "seedTime": "2:07.08"}, {"seedPlace": 42, "name": "Soetanto, Audrey", "year": "JR", "team": "CMU", "std": "NS", "seedTime": "2:07.29"}, {"seedPlace": 43, "name": "McCarty, Cierra", "year": "SR", "team": "Tufts", "std": "NS", "seedTime": "2:07.30"}, {"seedPlace": 44, "name": "Harrison, Elena", "year": "SO", "team": "Tufts", "std": "NS", "seedTime": "2:07.33"}, {"seedPlace": 45, "name": "Chen, Annaliese", "year": "SR", "team": "Swarthmore", "std": "NS", "seedTime": "2:07.65"}, {"seedPlace": 46, "name": "Swartwood, Belise", "year": "FR", "team": "MIT", "std": "NS", "seedTime": "2:08.26"}, {"seedPlace": 47, "name": "Lamb, Nina", "year": "SR", "team": "Springfield", "std": "NS", "seedTime": "2:09.14"}, {"seedPlace": 48, "name": "Hale, Alise", "year": "SR", "team": "SUNY Geneseo", "std": "NS", "seedTime": "2:09.66"}, {"seedPlace": 49, "name": "Sanderson, Jane", "year": "JR", "team": "Emory", "std": "NS", "seedTime": "2:10.70"}, {"seedPlace": 50, "name": "Wishnack, Charlotte", "year": "SR", "team": "Williams", "std": "NS", "seedTime": "2:10.70"}, {"seedPlace": 51, "name": "Sherman, Amaia", "year": "FR", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "2:11.69"}, {"seedPlace": 52, "name": "Brink, Audrey", "year": "FR", "team": "Denison", "std": "NS", "seedTime": "2:12.12"}, {"seedPlace": 53, "name": "White, Alden", "year": "SO", "team": "Williams", "std": "NS", "seedTime": "2:12.66"}, {"seedPlace": 54, "name": "Evans-Gibson, Natalia", "year": "FR", "team": "CMU", "std": "NS", "seedTime": "2:12.87"}, {"seedPlace": 55, "name": "Wujciak, Lara", "year": "SR", "team": "Tufts", "std": "NS", "seedTime": "2:14.40"}, {"seedPlace": 56, "name": "Murphree, Charlotte", "year": "SO", "team": "Trinity C.", "std": "NS", "seedTime": "2:15.85"}], "active": true, "day": 1}, {"num": 5, "gender": "Women", "name": "50 Freestyle", "isRelay": false, "entries": [{"seedPlace": 1, "name": "McIntyre, Kaley", "year": "JR", "team": "NYU", "std": "B", "seedTime": "22.62"}, {"seedPlace": 2, "name": "Fathman, Hannah", "year": "SR", "team": "Albion", "std": "B", "seedTime": "22.68"}, {"seedPlace": 3, "name": "Coppo, Francesca", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "22.84"}, {"seedPlace": 4, "name": "Roberson, Ella", "year": "SO", "team": "MIT", "std": "B", "seedTime": "22.86"}, {"seedPlace": 5, "name": "Collins, Genine", "year": "SO", "team": "Swarthmore", "std": "B", "seedTime": "22.88"}, {"seedPlace": 6, "name": "Mello, Valerie", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "22.90"}, {"seedPlace": 7, "name": "Sotek, Alexandra", "year": "SO", "team": "SUNY Geneseo", "std": "B", "seedTime": "23.08"}, {"seedPlace": 8, "name": "Kennedy, Ava", "year": "SR", "team": "Emory", "std": "B", "seedTime": "23.11"}, {"seedPlace": 9, "name": "Kadlecik, Grace", "year": "SR", "team": "Denison", "std": "B", "seedTime": "23.11"}, {"seedPlace": 10, "name": "Wasiniak, Laurel", "year": "JR", "team": "Hope College", "std": "B", "seedTime": "23.16"}, {"seedPlace": 11, "name": "Wilson, Braelyn", "year": "FR", "team": "Kean University", "std": "B", "seedTime": "23.16"}, {"seedPlace": 12, "name": "Peralta, Rourke", "year": "JR", "team": "Montclair St.", "std": "B", "seedTime": "23.18"}, {"seedPlace": 13, "name": "Cohen, Elizabeth", "year": "SO", "team": "Johns Hopkins", "std": "B", "seedTime": "23.20"}, {"seedPlace": 14, "name": "Turvey, Alexandra", "year": "GRAD", "team": "MIT", "std": "B", "seedTime": "23.25"}, {"seedPlace": 15, "name": "Naveen, Annika", "year": "JR", "team": "MIT", "std": "B", "seedTime": "23.28"}, {"seedPlace": 16, "name": "Geboy, Sydney", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "23.28"}, {"seedPlace": 17, "name": "Cudney, Jillian", "year": "GRAD", "team": "Tufts", "std": "B", "seedTime": "23.29"}, {"seedPlace": 18, "name": "Marco, Eliza", "year": "FR", "team": "Colby", "std": "B", "seedTime": "23.29"}, {"seedPlace": 19, "name": "Morse, Olivia", "year": "SO", "team": "Denison", "std": "B", "seedTime": "23.30"}, {"seedPlace": 20, "name": "Chambers, Gabriella", "year": "SR", "team": "Case Western", "std": "B", "seedTime": "23.31"}, {"seedPlace": 21, "name": "Xu, Emily", "year": "JR", "team": "Chicago", "std": "B", "seedTime": "23.31"}, {"seedPlace": 22, "name": "Benson, Amy", "year": "SO", "team": "Trinity U.", "std": "B", "seedTime": "23.31"}, {"seedPlace": 23, "name": "Farrell, Maggie", "year": "GRAD", "team": "Calvin", "std": "B", "seedTime": "23.33"}, {"seedPlace": 24, "name": "Croonquist, Amber", "year": "SR", "team": "Denison", "std": "B", "seedTime": "23.37"}, {"seedPlace": 25, "name": "Anthony, Elle", "year": "JR", "team": "Swarthmore", "std": "B", "seedTime": "23.38"}, {"seedPlace": 26, "name": "Vogen, Avery", "year": "SR", "team": "Denison", "std": "B", "seedTime": "23.42"}, {"seedPlace": 27, "name": "West, Caroline", "year": "SR", "team": "Centre College", "std": "B", "seedTime": "23.43"}, {"seedPlace": 28, "name": "Ryle, Lauren", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "23.43"}, {"seedPlace": 29, "name": "Palmroos, Maja", "year": "SR", "team": "Denison", "std": "B", "seedTime": "23.44"}, {"seedPlace": 30, "name": "Torrecillas-Jouault, Lisa", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "23.44"}, {"seedPlace": 31, "name": "McGrew, Anna", "year": "FR", "team": "Middlebury", "std": "B", "seedTime": "23.45"}, {"seedPlace": 32, "name": "Chambers, Isabella", "year": "JR", "team": "Tufts", "std": "B", "seedTime": "23.47"}, {"seedPlace": 33, "name": "Kan, Madeleine", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "23.49"}, {"seedPlace": 34, "name": "Turner, Isabella", "year": "JR", "team": "Hope College", "std": "B", "seedTime": "23.50"}, {"seedPlace": 35, "name": "Zhao, Karen", "year": "SR", "team": "Chicago", "std": "B", "seedTime": "23.52"}, {"seedPlace": 36, "name": "Bogan, Katherine", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "23.54"}, {"seedPlace": 37, "name": "Smith, Lucy", "year": "SO", "team": "Amherst", "std": "B", "seedTime": "23.55"}, {"seedPlace": 38, "name": "Kozma, Claire", "year": "JR", "team": "Case Western", "std": "B", "seedTime": "23.57"}, {"seedPlace": 39, "name": "Ramirez, Caroline", "year": "FR", "team": "Denison", "std": "NS", "seedTime": "23.60"}, {"seedPlace": 40, "name": "Eisenbeis, Gwenyth", "year": "JR", "team": "Kenyon", "std": "NS", "seedTime": "23.60"}, {"seedPlace": 41, "name": "Liu, Michelle", "year": "SR", "team": "Johns Hopkins", "std": "NS", "seedTime": "23.69"}, {"seedPlace": 42, "name": "Xayaveth, Hope", "year": "SO", "team": "NYU", "std": "NS", "seedTime": "23.71"}, {"seedPlace": 43, "name": "Wendt, Louisa", "year": "FR", "team": "Emory", "std": "NS", "seedTime": "23.73"}, {"seedPlace": 44, "name": "Oldham, Isabel", "year": "SR", "team": "NYU", "std": "NS", "seedTime": "23.75"}, {"seedPlace": 45, "name": "Veerapaneni, Jaya", "year": "FR", "team": "Johns Hopkins", "std": "NS", "seedTime": "23.80"}, {"seedPlace": 46, "name": "Aballea, Nina", "year": "SO", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "23.81"}, {"seedPlace": 47, "name": "Celtnieks, Penelope", "year": "JR", "team": "Emory", "std": "NS", "seedTime": "23.87"}, {"seedPlace": 48, "name": "Schiro, Francesca", "year": "SR", "team": "UW-Oshkosh", "std": "NS", "seedTime": "23.89"}, {"seedPlace": 49, "name": "Wray-Raabolle, Verity", "year": "SR", "team": "Macalester", "std": "NS", "seedTime": "23.95"}, {"seedPlace": 50, "name": "Tanizaki-Hudson, Kiana", "year": "SR", "team": "Chapman", "std": "NS", "seedTime": "24.04"}, {"seedPlace": 51, "name": "Pfeufer, Anna", "year": "SR", "team": "Denison", "std": "NS", "seedTime": "24.06"}, {"seedPlace": 52, "name": "Forest, Elisabella", "year": "SR", "team": "Chicago", "std": "NS", "seedTime": "24.29"}, {"seedPlace": 53, "name": "Tofflemire, Riley", "year": "SO", "team": "Denison", "std": "NS", "seedTime": "24.33"}, {"seedPlace": 54, "name": "Smyrniou, Angel", "year": "FR", "team": "Tufts", "std": "NS", "seedTime": "24.35"}, {"seedPlace": 55, "name": "Hartmann, Reese", "year": "SR", "team": "Wheaton MA", "std": "NS", "seedTime": "24.36"}, {"seedPlace": 56, "name": "Yang, Iris", "year": "SR", "team": "MIT", "std": "NS", "seedTime": "24.39"}, {"seedPlace": 57, "name": "Klemm, Isabella", "year": "JR", "team": "YCP", "std": "NS", "seedTime": "24.42"}, {"seedPlace": 58, "name": "Baik, Youngju", "year": "SO", "team": "NYU", "std": "NS", "seedTime": "24.72"}, {"seedPlace": 59, "name": "Rotival, Sophie", "year": "SR", "team": "Swarthmore", "std": "NS", "seedTime": "24.79"}, {"seedPlace": 60, "name": "Lee, Hannah", "year": "SO", "team": "Wash U. MO", "std": "NS", "seedTime": "25.03"}, {"seedPlace": 61, "name": "Palmer, Sarah", "year": "SO", "team": "Bates", "std": "NS", "seedTime": "25.21"}, {"seedPlace": 62, "name": "Shaffer, Elizabeth", "year": "SO", "team": "CMU", "std": "NS", "seedTime": "25.24"}, {"seedPlace": 63, "name": "Stevenson, Amelia", "year": "SO", "team": "Kenyon", "std": "NS", "seedTime": "25.38"}, {"seedPlace": 64, "name": "Li, Anna", "year": "SR", "team": "NYU", "std": "NS", "seedTime": "26.03"}, {"seedPlace": 65, "name": "Lu, Madison", "year": "FR", "team": "Emory", "std": "NS", "seedTime": "26.18"}], "active": true, "day": 1}, {"num": 8, "gender": "Women", "name": "400 Medley Relay", "isRelay": true, "entries": [{"seedPlace": 1, "name": "NYU Relay", "year": "", "team": "NYU", "std": "B", "seedTime": "3:38.21"}, {"seedPlace": 2, "name": "Kenyon Relay", "year": "", "team": "Kenyon", "std": "B", "seedTime": "3:39.88"}, {"seedPlace": 3, "name": "MIT Relay", "year": "", "team": "MIT", "std": "B", "seedTime": "3:39.96"}, {"seedPlace": 4, "name": "Williams Relay", "year": "", "team": "Williams", "std": "B", "seedTime": "3:41.58"}, {"seedPlace": 5, "name": "Denison Relay", "year": "", "team": "Denison", "std": "B", "seedTime": "3:41.73"}, {"seedPlace": 6, "name": "Emory Relay", "year": "", "team": "Emory", "std": "B", "seedTime": "3:42.27"}, {"seedPlace": 7, "name": "Hope College Relay", "year": "", "team": "Hope College", "std": "B", "seedTime": "3:43.33"}, {"seedPlace": 8, "name": "Chicago Relay", "year": "", "team": "Chicago", "std": "B", "seedTime": "3:43.50"}, {"seedPlace": 9, "name": "Tufts Relay", "year": "", "team": "Tufts", "std": "B", "seedTime": "3:44.61"}, {"seedPlace": 10, "name": "Pomona-Pitzer Relay", "year": "", "team": "Pomona-Pitzer", "std": "B", "seedTime": "3:44.76"}, {"seedPlace": 11, "name": "Colby Relay", "year": "", "team": "Colby", "std": "B", "seedTime": "3:45.24"}, {"seedPlace": 12, "name": "Calvin Relay", "year": "", "team": "Calvin", "std": "B", "seedTime": "3:45.97"}, {"seedPlace": 13, "name": "Amherst Relay", "year": "", "team": "Amherst", "std": "B", "seedTime": "3:46.43"}, {"seedPlace": 14, "name": "Johns Hopkins Relay", "year": "", "team": "Johns Hopkins", "std": "B", "seedTime": "3:46.44"}, {"seedPlace": 15, "name": "Wash U. MO Relay", "year": "", "team": "Wash U. MO", "std": "B", "seedTime": "3:46.79"}, {"seedPlace": 16, "name": "Swarthmore Relay", "year": "", "team": "Swarthmore", "std": "B", "seedTime": "3:46.84"}, {"seedPlace": 17, "name": "UW-L Relay", "year": "", "team": "UW-L", "std": "B", "seedTime": "3:47.25"}, {"seedPlace": 18, "name": "Claremont MS Relay", "year": "", "team": "Claremont MS", "std": "B", "seedTime": "3:47.44"}, {"seedPlace": 19, "name": "SUNY Geneseo Relay", "year": "", "team": "SUNY Geneseo", "std": "B", "seedTime": "3:47.49"}, {"seedPlace": 20, "name": "Mary Washington Relay", "year": "", "team": "Mary Washington", "std": "B", "seedTime": "3:48.38"}, {"seedPlace": 21, "name": "Case Western Relay", "year": "", "team": "Case Western", "std": "B", "seedTime": "3:48.80"}, {"seedPlace": 22, "name": "CMU Relay", "year": "", "team": "CMU", "std": "B", "seedTime": "3:49.22"}, {"seedPlace": 23, "name": "Trinity U. Relay", "year": "", "team": "Trinity U.", "std": "B", "seedTime": "3:49.24"}, {"seedPlace": 24, "name": "Middlebury Relay", "year": "", "team": "Middlebury", "std": "B", "seedTime": "3:49.38"}, {"seedPlace": 25, "name": "Gettysburg Relay", "year": "", "team": "Gettysburg", "std": "B", "seedTime": "3:49.73"}, {"seedPlace": 26, "name": "Rensselaer Relay", "year": "", "team": "Rensselaer", "std": "NS", "seedTime": "3:54.52"}], "active": true, "day": 1}, {"num": 10, "gender": "Women", "name": "400 Individual Medley", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Verkleeren, Sophia", "year": "SR", "team": "Williams", "std": "B", "seedTime": "4:16.77"}, {"seedPlace": 2, "name": "Bernard, Sarah", "year": "FR", "team": "MIT", "std": "B", "seedTime": "4:19.58"}, {"seedPlace": 3, "name": "Harris, Emily", "year": "JR", "team": "Denison", "std": "B", "seedTime": "4:19.73"}, {"seedPlace": 4, "name": "Garre, Natalie", "year": "FR", "team": "Bowdoin", "std": "B", "seedTime": "4:21.03"}, {"seedPlace": 5, "name": "Burns, Neely", "year": "JR", "team": "Trinity U.", "std": "B", "seedTime": "4:21.36"}, {"seedPlace": 6, "name": "Weygandt, Quinn", "year": "JR", "team": "Swarthmore", "std": "B", "seedTime": "4:21.64"}, {"seedPlace": 7, "name": "Lynch, Calista", "year": "SO", "team": "NYU", "std": "B", "seedTime": "4:21.74"}, {"seedPlace": 8, "name": "McCallie, Sydney", "year": "GRAD", "team": "Salisbury", "std": "B", "seedTime": "4:23.69"}, {"seedPlace": 9, "name": "liu, Meredith", "year": "JR", "team": "Emory", "std": "B", "seedTime": "4:23.86"}, {"seedPlace": 10, "name": "Widmer, Ashlyn", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "4:24.04"}, {"seedPlace": 11, "name": "Herrera, Jordan", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "4:24.65"}, {"seedPlace": 12, "name": "Adler, Yan Yee", "year": "FR", "team": "MIT", "std": "B", "seedTime": "4:24.66"}, {"seedPlace": 13, "name": "McEver, Ella", "year": "SO", "team": "Chicago", "std": "B", "seedTime": "4:24.95"}, {"seedPlace": 14, "name": "Walsh, Elizabeth", "year": "JR", "team": "Bowdoin", "std": "B", "seedTime": "4:25.15"}, {"seedPlace": 15, "name": "Dunn, Madeleine", "year": "JR", "team": "Tufts", "std": "B", "seedTime": "4:25.21"}, {"seedPlace": 16, "name": "Tokuz, Zeynep", "year": "SO", "team": "NYU", "std": "B", "seedTime": "4:25.37"}, {"seedPlace": 17, "name": "Kraus, Sara", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "4:25.66"}, {"seedPlace": 18, "name": "Spangler, Bethany", "year": "FR", "team": "NYU", "std": "B", "seedTime": "4:25.74"}, {"seedPlace": 19, "name": "Jones, Kathryn", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "4:25.85"}, {"seedPlace": 20, "name": "Crane, Jessica", "year": "FR", "team": "MIT", "std": "B", "seedTime": "4:25.99"}, {"seedPlace": 21, "name": "Boyer, Tess", "year": "SO", "team": "Wheaton IL", "std": "B", "seedTime": "4:26.00"}, {"seedPlace": 22, "name": "Greenberg, Abigail", "year": "SO", "team": "Williams", "std": "B", "seedTime": "4:26.19"}, {"seedPlace": 23, "name": "McCarty, Cierra", "year": "SR", "team": "Tufts", "std": "B", "seedTime": "4:26.50"}, {"seedPlace": 24, "name": "Schraber, Erika", "year": "SO", "team": "Denison", "std": "B", "seedTime": "4:26.78"}, {"seedPlace": 25, "name": "Scharpf, Alexandra", "year": "FR", "team": "CMU", "std": "B", "seedTime": "4:26.91"}, {"seedPlace": 26, "name": "Lee, Megan", "year": "SR", "team": "Amherst", "std": "B", "seedTime": "4:27.23"}, {"seedPlace": 27, "name": "Bello, Rachel", "year": "SO", "team": "Wash U. MO", "std": "B", "seedTime": "4:27.44"}, {"seedPlace": 28, "name": "Appl, Emmie", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "4:27.61"}, {"seedPlace": 29, "name": "Berry, Ava", "year": "SO", "team": "Gettysburg", "std": "B", "seedTime": "4:27.78"}, {"seedPlace": 30, "name": "Jones, Graeleigh", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "4:28.02"}, {"seedPlace": 31, "name": "Rohde, Lauren", "year": "SR", "team": "Swarthmore", "std": "B", "seedTime": "4:28.06"}, {"seedPlace": 32, "name": "Schmidt, Revere", "year": "SO", "team": "Claremont MS", "std": "NS", "seedTime": "4:33.44"}, {"seedPlace": 33, "name": "Katz, Chloe", "year": "SR", "team": "Middlebury", "std": "NS", "seedTime": "4:34.00"}, {"seedPlace": 34, "name": "Poe, Zoe", "year": "FR", "team": "Calvin", "std": "NS", "seedTime": "4:34.29"}, {"seedPlace": 35, "name": "Codd, Lily", "year": "JR", "team": "Williams", "std": "NS", "seedTime": "4:34.48"}, {"seedPlace": 36, "name": "Shaw, Kathryn", "year": "JR", "team": "Claremont MS", "std": "NS", "seedTime": "4:38.02"}], "active": true, "day": 2}, {"num": 12, "gender": "Women", "name": "100 Butterfly", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Ranile, Nicole", "year": "JR", "team": "NYU", "std": "B", "seedTime": "54.23"}, {"seedPlace": 2, "name": "Tanizaki-Hudson, Kiana", "year": "SR", "team": "Chapman", "std": "B", "seedTime": "54.39"}, {"seedPlace": 3, "name": "Fathman, Hannah", "year": "SR", "team": "Albion", "std": "B", "seedTime": "54.45"}, {"seedPlace": 4, "name": "Xayaveth, Hope", "year": "SO", "team": "NYU", "std": "B", "seedTime": "54.47"}, {"seedPlace": 5, "name": "Pennington, Elizabeth", "year": "JR", "team": "Rowan", "std": "B", "seedTime": "54.48"}, {"seedPlace": 6, "name": "Greeneway, Allison", "year": "FR", "team": "Emory", "std": "B", "seedTime": "54.48"}, {"seedPlace": 7, "name": "Farrell, Maggie", "year": "GRAD", "team": "Calvin", "std": "B", "seedTime": "54.71"}, {"seedPlace": 8, "name": "Pritchett, Emma", "year": "SR", "team": "Denison", "std": "B", "seedTime": "54.85"}, {"seedPlace": 9, "name": "Smith, Sydney", "year": "SO", "team": "MIT", "std": "B", "seedTime": "54.89"}, {"seedPlace": 10, "name": "Kozma, Claire", "year": "JR", "team": "Case Western", "std": "B", "seedTime": "54.97"}, {"seedPlace": 11, "name": "Mayfield, Mackenzie", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "55.01"}, {"seedPlace": 12, "name": "Turvey, Alexandra", "year": "GRAD", "team": "MIT", "std": "B", "seedTime": "55.02"}, {"seedPlace": 13, "name": "Ferguson, Phoebe", "year": "JR", "team": "Denison", "std": "B", "seedTime": "55.05"}, {"seedPlace": 14, "name": "Palmroos, Maja", "year": "SR", "team": "Denison", "std": "B", "seedTime": "55.09"}, {"seedPlace": 15, "name": "Xu, Emily", "year": "JR", "team": "Chicago", "std": "B", "seedTime": "55.14"}, {"seedPlace": 16, "name": "Hale, Alise", "year": "SR", "team": "SUNY Geneseo", "std": "B", "seedTime": "55.18"}, {"seedPlace": 17, "name": "Miller, Kelsie", "year": "SO", "team": "St. Mary's MD", "std": "B", "seedTime": "55.22"}, {"seedPlace": 18, "name": "Leopold, Mary", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "55.24"}, {"seedPlace": 19, "name": "Smyrniou, Angel", "year": "FR", "team": "Tufts", "std": "B", "seedTime": "55.25"}, {"seedPlace": 20, "name": "Byun, Sun Young", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "55.31"}, {"seedPlace": 21, "name": "Gomez, Reina", "year": "SO", "team": "NYU", "std": "B", "seedTime": "55.32"}, {"seedPlace": 22, "name": "Baik, Youngju", "year": "SO", "team": "NYU", "std": "B", "seedTime": "55.35"}, {"seedPlace": 23, "name": "West, Caroline", "year": "SR", "team": "Centre College", "std": "B", "seedTime": "55.36"}, {"seedPlace": 24, "name": "Croonquist, Amber", "year": "SR", "team": "Denison", "std": "B", "seedTime": "55.41"}, {"seedPlace": 25, "name": "Kan, Madeleine", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "55.48"}, {"seedPlace": 26, "name": "Foltenyi, Jade", "year": "JR", "team": "Tufts", "std": "B", "seedTime": "55.52"}, {"seedPlace": 27, "name": "Lee, Kennedy", "year": "FR", "team": "Johns Hopkins", "std": "B", "seedTime": "55.57"}, {"seedPlace": 28, "name": "Arnold, Paige", "year": "SO", "team": "Amherst", "std": "B", "seedTime": "55.68"}, {"seedPlace": 29, "name": "Ford, Celia", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "55.68"}, {"seedPlace": 30, "name": "Park, Jasmine", "year": "SO", "team": "Denison", "std": "B", "seedTime": "55.74"}, {"seedPlace": 31, "name": "Harrison, Elena", "year": "SO", "team": "Tufts", "std": "B", "seedTime": "55.77"}, {"seedPlace": 32, "name": "Sotek, Alexandra", "year": "SO", "team": "SUNY Geneseo", "std": "B", "seedTime": "55.78"}, {"seedPlace": 33, "name": "Jungers, Megan", "year": "GRAD", "team": "Emory", "std": "B", "seedTime": "55.84"}, {"seedPlace": 34, "name": "Watson, Peyton", "year": "SO", "team": "Wash U. MO", "std": "B", "seedTime": "55.89"}, {"seedPlace": 35, "name": "Swartwood, Belise", "year": "FR", "team": "MIT", "std": "NS", "seedTime": "56.01"}, {"seedPlace": 36, "name": "Geboy, Sydney", "year": "SR", "team": "Kenyon", "std": "NS", "seedTime": "56.17"}, {"seedPlace": 37, "name": "Collins, Genine", "year": "SO", "team": "Swarthmore", "std": "NS", "seedTime": "56.25"}, {"seedPlace": 38, "name": "Soetanto, Audrey", "year": "JR", "team": "CMU", "std": "NS", "seedTime": "56.30"}, {"seedPlace": 39, "name": "Chen, Annaliese", "year": "SR", "team": "Swarthmore", "std": "NS", "seedTime": "56.39"}, {"seedPlace": 40, "name": "Evans-Gibson, Natalia", "year": "FR", "team": "CMU", "std": "NS", "seedTime": "56.44"}, {"seedPlace": 41, "name": "Wujciak, Lara", "year": "SR", "team": "Tufts", "std": "NS", "seedTime": "56.46"}, {"seedPlace": 42, "name": "Cohen, Elizabeth", "year": "SO", "team": "Johns Hopkins", "std": "NS", "seedTime": "56.50"}, {"seedPlace": 43, "name": "Giordano, Sofia", "year": "SO", "team": "Kenyon", "std": "NS", "seedTime": "56.76"}, {"seedPlace": 44, "name": "Stevenson, Amelia", "year": "SO", "team": "Kenyon", "std": "NS", "seedTime": "57.47"}, {"seedPlace": 45, "name": "Smythe, Paxton", "year": "JR", "team": "Rhodes", "std": "NS", "seedTime": "57.78"}, {"seedPlace": 46, "name": "Georgopoulou, Ioanna", "year": "SR", "team": "Chicago", "std": "NS", "seedTime": "58.69"}, {"seedPlace": 47, "name": "Groves, Ruby", "year": "JR", "team": "Williams", "std": "NS", "seedTime": "59.07"}, {"seedPlace": 48, "name": "SINGH, Gaurika", "year": "SR", "team": "Tufts", "std": "NS", "seedTime": "1:00.32"}, {"seedPlace": 49, "name": "Peralta, Rourke", "year": "JR", "team": "Montclair St.", "std": "NS", "seedTime": "1:01.84"}], "active": true, "day": 2}, {"num": 14, "gender": "Women", "name": "200 Freestyle", "isRelay": false, "entries": [{"seedPlace": 1, "name": "McIntyre, Kaley", "year": "JR", "team": "NYU", "std": "B", "seedTime": "1:46.15"}, {"seedPlace": 2, "name": "Helm, Penelope", "year": "GRAD", "team": "Emory", "std": "B", "seedTime": "1:48.73"}, {"seedPlace": 3, "name": "Brown, Quinn", "year": "JR", "team": "Denison", "std": "B", "seedTime": "1:48.74"}, {"seedPlace": 4, "name": "Roebuck, Carter", "year": "SO", "team": "Williams", "std": "B", "seedTime": "1:48.82"}, {"seedPlace": 5, "name": "Roberson, Ella", "year": "SO", "team": "MIT", "std": "B", "seedTime": "1:49.27"}, {"seedPlace": 6, "name": "Caymaz, Bengisu", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "1:49.64"}, {"seedPlace": 7, "name": "Wasiniak, Laurel", "year": "JR", "team": "Hope College", "std": "B", "seedTime": "1:49.70"}, {"seedPlace": 8, "name": "Haag, Molly", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "1:49.71"}, {"seedPlace": 9, "name": "Mello, Valerie", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:49.78"}, {"seedPlace": 10, "name": "Boorjian, Natalie", "year": "SO", "team": "Emory", "std": "B", "seedTime": "1:49.90"}, {"seedPlace": 11, "name": "Zhao, Karen", "year": "SR", "team": "Chicago", "std": "B", "seedTime": "1:50.34"}, {"seedPlace": 12, "name": "Motekaitis, Elle", "year": "GRAD", "team": "NYU", "std": "B", "seedTime": "1:50.45"}, {"seedPlace": 13, "name": "Stone, Garin", "year": "JR", "team": "Wheaton MA", "std": "B", "seedTime": "1:50.58"}, {"seedPlace": 14, "name": "Wala, Aanya", "year": "SO", "team": "NYU", "std": "B", "seedTime": "1:50.59"}, {"seedPlace": 15, "name": "Merkel, Emma", "year": "SO", "team": "Calvin", "std": "B", "seedTime": "1:50.66"}, {"seedPlace": 16, "name": "Dzieciol, Karolina", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:50.82"}, {"seedPlace": 17, "name": "Oldham, Isabel", "year": "SR", "team": "NYU", "std": "B", "seedTime": "1:50.85"}, {"seedPlace": 18, "name": "Benson, Amy", "year": "SO", "team": "Trinity U.", "std": "B", "seedTime": "1:50.88"}, {"seedPlace": 19, "name": "Swan, Katherine", "year": "SO", "team": "Emory", "std": "B", "seedTime": "1:51.06"}, {"seedPlace": 20, "name": "Pfeufer, Anna", "year": "SR", "team": "Denison", "std": "B", "seedTime": "1:51.06"}, {"seedPlace": 21, "name": "Mitchell, Elodie", "year": "FR", "team": "Emory", "std": "B", "seedTime": "1:51.10"}, {"seedPlace": 22, "name": "Dixon, Charlotte", "year": "FR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:51.13"}, {"seedPlace": 23, "name": "Er, Melissa", "year": "FR", "team": "Johns Hopkins", "std": "B", "seedTime": "1:51.41"}, {"seedPlace": 24, "name": "Rusk, Maren", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:51.44"}, {"seedPlace": 25, "name": "Yazici, Ceyda", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "1:51.49"}, {"seedPlace": 26, "name": "Schiro, Francesca", "year": "SR", "team": "UW-Oshkosh", "std": "B", "seedTime": "1:51.54"}, {"seedPlace": 27, "name": "Brown, Nora Lee", "year": "FR", "team": "Kenyon", "std": "B", "seedTime": "1:51.55"}, {"seedPlace": 28, "name": "Muller, Emery", "year": "JR", "team": "NYU", "std": "B", "seedTime": "1:51.65"}, {"seedPlace": 29, "name": "Wendt, Louisa", "year": "FR", "team": "Emory", "std": "B", "seedTime": "1:51.72"}, {"seedPlace": 30, "name": "Yancey, Mia", "year": "SR", "team": "Gettysburg", "std": "B", "seedTime": "1:51.79"}, {"seedPlace": 31, "name": "Aballea, Nina", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:51.84"}, {"seedPlace": 32, "name": "Morse, Olivia", "year": "SO", "team": "Denison", "std": "B", "seedTime": "1:51.88"}, {"seedPlace": 33, "name": "Tropper, Stephanie", "year": "SR", "team": "Bates", "std": "B", "seedTime": "1:52.03"}, {"seedPlace": 34, "name": "Daly, Sarah", "year": "SR", "team": "Emory", "std": "B", "seedTime": "1:52.15"}, {"seedPlace": 35, "name": "Kelley, Maeve", "year": "SO", "team": "Amherst", "std": "B", "seedTime": "1:52.17"}, {"seedPlace": 36, "name": "Rohovit, Taylor", "year": "SR", "team": "Johns Hopkins", "std": "NS", "seedTime": "1:52.18"}, {"seedPlace": 37, "name": "Wheeler, Quinci", "year": "JR", "team": "Tufts", "std": "NS", "seedTime": "1:52.18"}, {"seedPlace": 38, "name": "Bream, Ollie", "year": "SR", "team": "Wooster", "std": "NS", "seedTime": "1:52.23"}, {"seedPlace": 39, "name": "Chambers, Gabriella", "year": "SR", "team": "Case Western", "std": "NS", "seedTime": "1:52.59"}, {"seedPlace": 40, "name": "Chatoor, Jada", "year": "SR", "team": "Emory", "std": "NS", "seedTime": "1:52.60"}, {"seedPlace": 41, "name": "Barrientos, Isabella", "year": "SR", "team": "Wash U. MO", "std": "NS", "seedTime": "1:52.64"}, {"seedPlace": 42, "name": "Hosack, Molly", "year": "JR", "team": "UWEC", "std": "NS", "seedTime": "1:53.21"}, {"seedPlace": 43, "name": "Chtokolov, Daria", "year": "SO", "team": "NYU", "std": "NS", "seedTime": "1:53.29"}, {"seedPlace": 44, "name": "Cudney, Jillian", "year": "GRAD", "team": "Tufts", "std": "NS", "seedTime": "1:53.32"}, {"seedPlace": 45, "name": "Wisner, Taryn", "year": "SR", "team": "Denison", "std": "NS", "seedTime": "1:53.69"}, {"seedPlace": 46, "name": "Main, Morgan", "year": "JR", "team": "Emory", "std": "NS", "seedTime": "1:54.46"}, {"seedPlace": 47, "name": "Kelley, Kyla", "year": "FR", "team": "Williams", "std": "NS", "seedTime": "1:55.15"}, {"seedPlace": 48, "name": "Chambers, Noa", "year": "FR", "team": "Tufts", "std": "NS", "seedTime": "1:55.90"}, {"seedPlace": 49, "name": "Susil, Meghan", "year": "SR", "team": "Johns Hopkins", "std": "NS", "seedTime": "1:56.21"}, {"seedPlace": 50, "name": "Richards, Lauren", "year": "SO", "team": "Chicago", "std": "NS", "seedTime": "1:56.23"}], "active": true, "day": 2}, {"num": 17, "gender": "Women", "name": "200 Freestyle Relay", "isRelay": true, "entries": [{"seedPlace": 1, "name": "MIT Relay", "year": "", "team": "MIT", "std": "B", "seedTime": "1:31.06"}, {"seedPlace": 2, "name": "Hope College Relay", "year": "", "team": "Hope College", "std": "B", "seedTime": "1:31.75"}, {"seedPlace": 3, "name": "Pomona-Pitzer Relay", "year": "", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:32.05"}, {"seedPlace": 4, "name": "Calvin Relay", "year": "", "team": "Calvin", "std": "B", "seedTime": "1:32.06"}, {"seedPlace": 5, "name": "Kenyon Relay", "year": "", "team": "Kenyon", "std": "B", "seedTime": "1:32.23"}, {"seedPlace": 6, "name": "NYU Relay", "year": "", "team": "NYU", "std": "B", "seedTime": "1:32.34"}, {"seedPlace": 7, "name": "Emory Relay", "year": "", "team": "Emory", "std": "B", "seedTime": "1:32.61"}, {"seedPlace": 8, "name": "Tufts Relay", "year": "", "team": "Tufts", "std": "B", "seedTime": "1:33.11"}, {"seedPlace": 9, "name": "Case Western Relay", "year": "", "team": "Case Western", "std": "B", "seedTime": "1:33.20"}, {"seedPlace": 10, "name": "Denison Relay", "year": "", "team": "Denison", "std": "B", "seedTime": "1:33.20"}, {"seedPlace": 11, "name": "Swarthmore Relay", "year": "", "team": "Swarthmore", "std": "B", "seedTime": "1:33.28"}, {"seedPlace": 12, "name": "Williams Relay", "year": "", "team": "Williams", "std": "B", "seedTime": "1:33.34"}, {"seedPlace": 13, "name": "Johns Hopkins Relay", "year": "", "team": "Johns Hopkins", "std": "B", "seedTime": "1:33.53"}, {"seedPlace": 14, "name": "Gettysburg Relay", "year": "", "team": "Gettysburg", "std": "B", "seedTime": "1:33.56"}, {"seedPlace": 15, "name": "Hamilton Relay", "year": "", "team": "Hamilton", "std": "B", "seedTime": "1:33.87"}, {"seedPlace": 16, "name": "Chicago Relay", "year": "", "team": "Chicago", "std": "B", "seedTime": "1:33.92"}, {"seedPlace": 17, "name": "W&L Relay", "year": "", "team": "W&L", "std": "B", "seedTime": "1:34.02"}, {"seedPlace": 18, "name": "Rensselaer Relay", "year": "", "team": "Rensselaer", "std": "B", "seedTime": "1:34.17"}, {"seedPlace": 19, "name": "Amherst Relay", "year": "", "team": "Amherst", "std": "B", "seedTime": "1:34.20"}, {"seedPlace": 20, "name": "Trinity U. Relay", "year": "", "team": "Trinity U.", "std": "B", "seedTime": "1:34.29"}, {"seedPlace": 21, "name": "Colby Relay", "year": "", "team": "Colby", "std": "B", "seedTime": "1:34.29"}, {"seedPlace": 22, "name": "Claremont MS Relay", "year": "", "team": "Claremont MS", "std": "B", "seedTime": "1:34.57"}, {"seedPlace": 23, "name": "SUNY Geneseo Relay", "year": "", "team": "SUNY Geneseo", "std": "B", "seedTime": "1:34.83"}, {"seedPlace": 24, "name": "Wash U. MO Relay", "year": "", "team": "Wash U. MO", "std": "NS", "seedTime": "1:35.21"}, {"seedPlace": 25, "name": "UW-L Relay", "year": "", "team": "UW-L", "std": "NS", "seedTime": "1:35.57"}, {"seedPlace": 26, "name": "CMU Relay", "year": "", "team": "CMU", "std": "NS", "seedTime": "1:36.08"}, {"seedPlace": 27, "name": "Mary Washington Relay", "year": "", "team": "Mary Washington", "std": "NS", "seedTime": "1:36.34"}, {"seedPlace": 28, "name": "Middlebury Relay", "year": "", "team": "Middlebury", "std": "NS", "seedTime": "1:36.53"}, {"seedPlace": 29, "name": "Bowdoin Relay", "year": "", "team": "Bowdoin", "std": "NS", "seedTime": "1:37.69"}], "active": true, "day": 2}, {"num": 19, "gender": "Women", "name": "200 Medley Relay", "isRelay": true, "entries": [{"seedPlace": 1, "name": "MIT Relay", "year": "", "team": "MIT", "std": "B", "seedTime": "1:40.03"}, {"seedPlace": 2, "name": "Denison Relay", "year": "", "team": "Denison", "std": "B", "seedTime": "1:40.37"}, {"seedPlace": 3, "name": "Kenyon Relay", "year": "", "team": "Kenyon", "std": "B", "seedTime": "1:40.77"}, {"seedPlace": 4, "name": "Hope College Relay", "year": "", "team": "Hope College", "std": "B", "seedTime": "1:41.02"}, {"seedPlace": 5, "name": "Tufts Relay", "year": "", "team": "Tufts", "std": "B", "seedTime": "1:41.31"}, {"seedPlace": 6, "name": "Emory Relay", "year": "", "team": "Emory", "std": "B", "seedTime": "1:41.52"}, {"seedPlace": 7, "name": "Williams Relay", "year": "", "team": "Williams", "std": "B", "seedTime": "1:41.54"}, {"seedPlace": 8, "name": "NYU Relay", "year": "", "team": "NYU", "std": "B", "seedTime": "1:41.76"}, {"seedPlace": 9, "name": "Colby Relay", "year": "", "team": "Colby", "std": "B", "seedTime": "1:41.95"}, {"seedPlace": 10, "name": "Chicago Relay", "year": "", "team": "Chicago", "std": "B", "seedTime": "1:41.97"}, {"seedPlace": 11, "name": "Claremont MS Relay", "year": "", "team": "Claremont MS", "std": "B", "seedTime": "1:42.21"}, {"seedPlace": 12, "name": "Calvin Relay", "year": "", "team": "Calvin", "std": "B", "seedTime": "1:42.24"}, {"seedPlace": 13, "name": "Pomona-Pitzer Relay", "year": "", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:42.36"}, {"seedPlace": 14, "name": "UW-L Relay", "year": "", "team": "UW-L", "std": "B", "seedTime": "1:42.86"}, {"seedPlace": 15, "name": "SUNY Geneseo Relay", "year": "", "team": "SUNY Geneseo", "std": "B", "seedTime": "1:42.87"}, {"seedPlace": 16, "name": "Johns Hopkins Relay", "year": "", "team": "Johns Hopkins", "std": "B", "seedTime": "1:43.00"}, {"seedPlace": 17, "name": "Wash U. MO Relay", "year": "", "team": "Wash U. MO", "std": "B", "seedTime": "1:43.09"}, {"seedPlace": 18, "name": "Swarthmore Relay", "year": "", "team": "Swarthmore", "std": "B", "seedTime": "1:43.27"}, {"seedPlace": 19, "name": "Middlebury Relay", "year": "", "team": "Middlebury", "std": "B", "seedTime": "1:43.28"}, {"seedPlace": 20, "name": "Mary Washington Relay", "year": "", "team": "Mary Washington", "std": "B", "seedTime": "1:43.88"}, {"seedPlace": 21, "name": "Trinity U. Relay", "year": "", "team": "Trinity U.", "std": "B", "seedTime": "1:44.02"}, {"seedPlace": 22, "name": "CMU Relay", "year": "", "team": "CMU", "std": "B", "seedTime": "1:44.04"}, {"seedPlace": 23, "name": "Gettysburg Relay", "year": "", "team": "Gettysburg", "std": "B", "seedTime": "1:44.19"}, {"seedPlace": 24, "name": "Amherst Relay", "year": "", "team": "Amherst", "std": "B", "seedTime": "1:44.38"}, {"seedPlace": 25, "name": "Case Western Relay", "year": "", "team": "Case Western", "std": "NS", "seedTime": "1:46.34"}, {"seedPlace": 26, "name": "W&L Relay", "year": "", "team": "W&L", "std": "NS", "seedTime": "1:46.82"}, {"seedPlace": 27, "name": "Rensselaer Relay", "year": "", "team": "Rensselaer", "std": "NS", "seedTime": "1:47.75"}], "active": true, "day": 3}, {"num": 21, "gender": "Women", "name": "200 Butterfly", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Ranile, Nicole", "year": "JR", "team": "NYU", "std": "B", "seedTime": "1:58.64"}, {"seedPlace": 2, "name": "Marshall, Caitlin", "year": "SR", "team": "NYU", "std": "B", "seedTime": "1:58.79"}, {"seedPlace": 3, "name": "Harris, Emily", "year": "JR", "team": "Denison", "std": "B", "seedTime": "1:59.93"}, {"seedPlace": 4, "name": "Mitchell, Elodie", "year": "FR", "team": "Emory", "std": "B", "seedTime": "2:00.25"}, {"seedPlace": 5, "name": "Mayfield, Mackenzie", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "2:01.30"}, {"seedPlace": 6, "name": "Gomez, Reina", "year": "SO", "team": "NYU", "std": "B", "seedTime": "2:01.83"}, {"seedPlace": 7, "name": "Hale, Alise", "year": "SR", "team": "SUNY Geneseo", "std": "B", "seedTime": "2:01.97"}, {"seedPlace": 8, "name": "Kelley, Maeve", "year": "SO", "team": "Amherst", "std": "B", "seedTime": "2:01.99"}, {"seedPlace": 9, "name": "Swartwood, Belise", "year": "FR", "team": "MIT", "std": "B", "seedTime": "2:02.54"}, {"seedPlace": 10, "name": "Tanizaki-Hudson, Kiana", "year": "SR", "team": "Chapman", "std": "B", "seedTime": "2:02.73"}, {"seedPlace": 11, "name": "Pritchett, Emma", "year": "SR", "team": "Denison", "std": "B", "seedTime": "2:02.86"}, {"seedPlace": 12, "name": "Bream, Ollie", "year": "SR", "team": "Wooster", "std": "B", "seedTime": "2:02.95"}, {"seedPlace": 13, "name": "Swan, Katherine", "year": "SO", "team": "Emory", "std": "B", "seedTime": "2:03.09"}, {"seedPlace": 14, "name": "Daly, Sarah", "year": "SR", "team": "Emory", "std": "B", "seedTime": "2:03.17"}, {"seedPlace": 15, "name": "Giordano, Sofia", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "2:03.18"}, {"seedPlace": 16, "name": "Harrison, Elena", "year": "SO", "team": "Tufts", "std": "B", "seedTime": "2:03.30"}, {"seedPlace": 17, "name": "Evans-Gibson, Natalia", "year": "FR", "team": "CMU", "std": "B", "seedTime": "2:03.44"}, {"seedPlace": 18, "name": "Spangler, Bethany", "year": "FR", "team": "NYU", "std": "B", "seedTime": "2:03.49"}, {"seedPlace": 19, "name": "Greenberg, Abigail", "year": "SO", "team": "Williams", "std": "B", "seedTime": "2:03.56"}, {"seedPlace": 20, "name": "Wujciak, Lara", "year": "SR", "team": "Tufts", "std": "B", "seedTime": "2:03.59"}, {"seedPlace": 21, "name": "Stevenson, Amelia", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "2:03.68"}, {"seedPlace": 22, "name": "Groves, Ruby", "year": "JR", "team": "Williams", "std": "B", "seedTime": "2:03.75"}, {"seedPlace": 23, "name": "Weygandt, Quinn", "year": "JR", "team": "Swarthmore", "std": "B", "seedTime": "2:03.80"}, {"seedPlace": 24, "name": "Soetanto, Audrey", "year": "JR", "team": "CMU", "std": "B", "seedTime": "2:03.87"}, {"seedPlace": 25, "name": "Chen, Annaliese", "year": "SR", "team": "Swarthmore", "std": "B", "seedTime": "2:03.90"}, {"seedPlace": 26, "name": "Asch, Lexi", "year": "SO", "team": "Colby", "std": "B", "seedTime": "2:03.93"}, {"seedPlace": 27, "name": "Byun, Sun Young", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "2:04.12"}, {"seedPlace": 28, "name": "Boyer, Tess", "year": "SO", "team": "Wheaton IL", "std": "B", "seedTime": "2:04.53"}, {"seedPlace": 29, "name": "Walsh, Elizabeth", "year": "JR", "team": "Bowdoin", "std": "B", "seedTime": "2:04.57"}, {"seedPlace": 30, "name": "Stevenson, Harper", "year": "SO", "team": "Bowdoin", "std": "B", "seedTime": "2:04.66"}, {"seedPlace": 31, "name": "Tarbet, Isabella", "year": "SR", "team": "W&L", "std": "B", "seedTime": "2:04.95"}, {"seedPlace": 32, "name": "Baik, Youngju", "year": "SO", "team": "NYU", "std": "NS", "seedTime": "2:05.70"}, {"seedPlace": 33, "name": "Dzieciol, Karolina", "year": "SR", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "2:05.77"}, {"seedPlace": 34, "name": "Leopold, Mary", "year": "SO", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "2:06.41"}, {"seedPlace": 35, "name": "Scharpf, Alexandra", "year": "FR", "team": "CMU", "std": "NS", "seedTime": "2:06.81"}, {"seedPlace": 36, "name": "Herrera, Jordan", "year": "SR", "team": "Kenyon", "std": "NS", "seedTime": "2:06.86"}, {"seedPlace": 37, "name": "Rusk, Maren", "year": "SO", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "2:07.59"}, {"seedPlace": 38, "name": "Palmroos, Maja", "year": "SR", "team": "Denison", "std": "NS", "seedTime": "2:08.42"}, {"seedPlace": 39, "name": "Miller, Kelsie", "year": "SO", "team": "St. Mary's MD", "std": "NS", "seedTime": "2:08.77"}, {"seedPlace": 40, "name": "Tokuz, Zeynep", "year": "SO", "team": "NYU", "std": "NS", "seedTime": "2:10.84"}, {"seedPlace": 41, "name": "Schraber, Erika", "year": "SO", "team": "Denison", "std": "NS", "seedTime": "2:11.31"}], "active": true, "day": 3}, {"num": 23, "gender": "Women", "name": "100 Backstroke", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Augustyn, Kate", "year": "SR", "team": "MIT", "std": "B", "seedTime": "53.29"}, {"seedPlace": 2, "name": "Jungers, Megan", "year": "GRAD", "team": "Emory", "std": "B", "seedTime": "54.44"}, {"seedPlace": 3, "name": "Pennington, Elizabeth", "year": "JR", "team": "Rowan", "std": "B", "seedTime": "54.51"}, {"seedPlace": 4, "name": "Wilson, Braelyn", "year": "FR", "team": "Kean University", "std": "B", "seedTime": "54.67"}, {"seedPlace": 5, "name": "Park, Jasmine", "year": "SO", "team": "Denison", "std": "B", "seedTime": "54.76"}, {"seedPlace": 6, "name": "Smith, Sydney", "year": "SO", "team": "MIT", "std": "B", "seedTime": "54.92"}, {"seedPlace": 7, "name": "Robins, Clementine", "year": "SO", "team": "Williams", "std": "B", "seedTime": "54.98"}, {"seedPlace": 8, "name": "Eisenbeis, Gwenyth", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "55.06"}, {"seedPlace": 9, "name": "Naveen, Annika", "year": "JR", "team": "MIT", "std": "B", "seedTime": "55.06"}, {"seedPlace": 10, "name": "Celtnieks, Penelope", "year": "JR", "team": "Emory", "std": "B", "seedTime": "55.09"}, {"seedPlace": 11, "name": "Yang, Iris", "year": "SR", "team": "MIT", "std": "B", "seedTime": "55.09"}, {"seedPlace": 12, "name": "Wray-Raabolle, Verity", "year": "SR", "team": "Macalester", "std": "B", "seedTime": "55.17"}, {"seedPlace": 13, "name": "Kraus, Sara", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "55.25"}, {"seedPlace": 14, "name": "Durak, Anna", "year": "GRAD", "team": "Loras", "std": "B", "seedTime": "55.53"}, {"seedPlace": 15, "name": "Forest, Elisabella", "year": "SR", "team": "Chicago", "std": "B", "seedTime": "55.62"}, {"seedPlace": 16, "name": "Hahlen, Jordyn", "year": "SR", "team": "UW-L", "std": "B", "seedTime": "55.74"}, {"seedPlace": 17, "name": "SINGH, Gaurika", "year": "SR", "team": "Tufts", "std": "B", "seedTime": "55.85"}, {"seedPlace": 18, "name": "Coates, Nina", "year": "FR", "team": "Colby", "std": "B", "seedTime": "55.87"}, {"seedPlace": 19, "name": "Veerapaneni, Jaya", "year": "FR", "team": "Johns Hopkins", "std": "B", "seedTime": "55.89"}, {"seedPlace": 20, "name": "Hartmann, Reese", "year": "SR", "team": "Wheaton MA", "std": "B", "seedTime": "55.89"}, {"seedPlace": 21, "name": "Xu, Savannah", "year": "JR", "team": "CMU", "std": "B", "seedTime": "55.92"}, {"seedPlace": 22, "name": "Lee, Kennedy", "year": "FR", "team": "Johns Hopkins", "std": "B", "seedTime": "55.92"}, {"seedPlace": 23, "name": "Yoon, Isabelle", "year": "FR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "56.03"}, {"seedPlace": 24, "name": "Sherman, Amaia", "year": "FR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "56.04"}, {"seedPlace": 25, "name": "Torrecillas-Jouault, Lisa", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "56.13"}, {"seedPlace": 26, "name": "West, Caroline", "year": "SR", "team": "Centre College", "std": "B", "seedTime": "56.17"}, {"seedPlace": 27, "name": "Chambers, Noa", "year": "FR", "team": "Tufts", "std": "B", "seedTime": "56.19"}, {"seedPlace": 28, "name": "Dixon, Charlotte", "year": "FR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "56.19"}, {"seedPlace": 29, "name": "Georgopoulou, Ioanna", "year": "SR", "team": "Chicago", "std": "B", "seedTime": "56.26"}, {"seedPlace": 30, "name": "Ramirez, Caroline", "year": "FR", "team": "Denison", "std": "B", "seedTime": "56.27"}, {"seedPlace": 31, "name": "Merkel, Emma", "year": "SO", "team": "Calvin", "std": "B", "seedTime": "56.29"}, {"seedPlace": 32, "name": "Kadlecik, Grace", "year": "SR", "team": "Denison", "std": "B", "seedTime": "56.30"}, {"seedPlace": 33, "name": "Chen, Elizabeth", "year": "SO", "team": "Wash U. MO", "std": "B", "seedTime": "56.34"}, {"seedPlace": 34, "name": "White, Alden", "year": "SO", "team": "Williams", "std": "B", "seedTime": "56.42"}, {"seedPlace": 35, "name": "McGrew, Anna", "year": "FR", "team": "Middlebury", "std": "B", "seedTime": "56.43"}, {"seedPlace": 36, "name": "Crowley, Tahlia", "year": "JR", "team": "Colby", "std": "B", "seedTime": "56.51"}, {"seedPlace": 37, "name": "Landau, Gabriella", "year": "SR", "team": "Colby", "std": "B", "seedTime": "56.57"}, {"seedPlace": 38, "name": "Sanderson, Jane", "year": "JR", "team": "Emory", "std": "B", "seedTime": "56.69"}, {"seedPlace": 39, "name": "Yang, Irene", "year": "JR", "team": "Williams", "std": "B", "seedTime": "56.70"}, {"seedPlace": 40, "name": "Miler, Anna", "year": "FR", "team": "Johns Hopkins", "std": "B", "seedTime": "56.73"}, {"seedPlace": 41, "name": "Farrell, Maggie", "year": "GRAD", "team": "Calvin", "std": "NS", "seedTime": "56.84"}, {"seedPlace": 42, "name": "Hermann, Katie", "year": "JR", "team": "Hope College", "std": "NS", "seedTime": "57.28"}, {"seedPlace": 43, "name": "McKenzie, Delanie", "year": "SO", "team": "Gettysburg", "std": "NS", "seedTime": "57.52"}, {"seedPlace": 44, "name": "Kennedy, Ava", "year": "SR", "team": "Emory", "std": "NS", "seedTime": "59.82"}], "active": true, "day": 3}, {"num": 25, "gender": "Women", "name": "100 Breaststroke", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Fadely, Jennah", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "59.62"}, {"seedPlace": 2, "name": "Wei, Gabriella", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "1:01.05"}, {"seedPlace": 3, "name": "Van Eldik, Kelsey", "year": "FR", "team": "Kenyon", "std": "B", "seedTime": "1:01.94"}, {"seedPlace": 4, "name": "Thielking, Drue", "year": "JR", "team": "Denison", "std": "B", "seedTime": "1:01.98"}, {"seedPlace": 5, "name": "Bernard, Sarah", "year": "FR", "team": "MIT", "std": "B", "seedTime": "1:02.26"}, {"seedPlace": 6, "name": "Wishnack, Charlotte", "year": "SR", "team": "Williams", "std": "B", "seedTime": "1:02.46"}, {"seedPlace": 7, "name": "Cohen, Katie", "year": "SO", "team": "Emory", "std": "B", "seedTime": "1:02.47"}, {"seedPlace": 8, "name": "Tofflemire, Riley", "year": "SO", "team": "Denison", "std": "B", "seedTime": "1:02.47"}, {"seedPlace": 9, "name": "Gidley, Greta", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "1:02.48"}, {"seedPlace": 10, "name": "Soosai, Alicia", "year": "JR", "team": "Chicago", "std": "B", "seedTime": "1:02.48"}, {"seedPlace": 11, "name": "Li, Anna", "year": "SR", "team": "NYU", "std": "B", "seedTime": "1:02.51"}, {"seedPlace": 12, "name": "Klemm, Isabella", "year": "JR", "team": "YCP", "std": "B", "seedTime": "1:02.71"}, {"seedPlace": 13, "name": "Lacroix, Allison", "year": "SR", "team": "Amherst", "std": "B", "seedTime": "1:02.80"}, {"seedPlace": 14, "name": "Wheeler, Quinci", "year": "JR", "team": "Tufts", "std": "B", "seedTime": "1:02.85"}, {"seedPlace": 15, "name": "Palmer, Sarah", "year": "SO", "team": "Bates", "std": "B", "seedTime": "1:02.86"}, {"seedPlace": 16, "name": "Mottl, Kellen", "year": "JR", "team": "Colby", "std": "B", "seedTime": "1:02.94"}, {"seedPlace": 17, "name": "Ryle, Lauren", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "1:02.98"}, {"seedPlace": 18, "name": "Lamb, Nina", "year": "SR", "team": "Springfield", "std": "B", "seedTime": "1:03.00"}, {"seedPlace": 19, "name": "Smythe, Paxton", "year": "JR", "team": "Rhodes", "std": "B", "seedTime": "1:03.17"}, {"seedPlace": 20, "name": "Smith, Mattie", "year": "SR", "team": "Albion", "std": "B", "seedTime": "1:03.19"}, {"seedPlace": 21, "name": "Crysel, Caitlin", "year": "FR", "team": "Emory", "std": "B", "seedTime": "1:03.27"}, {"seedPlace": 22, "name": "Rotival, Sophie", "year": "SR", "team": "Swarthmore", "std": "B", "seedTime": "1:03.34"}, {"seedPlace": 23, "name": "Liu, Michelle", "year": "SR", "team": "Johns Hopkins", "std": "B", "seedTime": "1:03.39"}, {"seedPlace": 24, "name": "Lu, Madison", "year": "FR", "team": "Emory", "std": "B", "seedTime": "1:03.43"}, {"seedPlace": 25, "name": "Lee, Hannah", "year": "SO", "team": "Wash U. MO", "std": "B", "seedTime": "1:03.44"}, {"seedPlace": 26, "name": "Jones, Graeleigh", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:03.54"}, {"seedPlace": 27, "name": "Stasz, sydney", "year": "SO", "team": "Tufts", "std": "B", "seedTime": "1:03.72"}, {"seedPlace": 28, "name": "Bajwa, Elisabeth", "year": "SO", "team": "Calvin", "std": "B", "seedTime": "1:03.77"}, {"seedPlace": 29, "name": "Coppo, Francesca", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "1:03.83"}, {"seedPlace": 30, "name": "Murphree, Charlotte", "year": "SO", "team": "Trinity C.", "std": "B", "seedTime": "1:03.85"}, {"seedPlace": 31, "name": "Rohovit, Taylor", "year": "SR", "team": "Johns Hopkins", "std": "B", "seedTime": "1:04.18"}, {"seedPlace": 32, "name": "Brink, Audrey", "year": "FR", "team": "Denison", "std": "NS", "seedTime": "1:04.66"}, {"seedPlace": 33, "name": "JOOS, SOPHIA", "year": "FR", "team": "Emory", "std": "NS", "seedTime": "1:05.10"}, {"seedPlace": 34, "name": "Shaffer, Elizabeth", "year": "SO", "team": "CMU", "std": "NS", "seedTime": "1:05.14"}, {"seedPlace": 35, "name": "Anthony, Elle", "year": "JR", "team": "Swarthmore", "std": "NS", "seedTime": "1:05.51"}, {"seedPlace": 36, "name": "Marco, Eliza", "year": "FR", "team": "Colby", "std": "NS", "seedTime": "1:05.67"}, {"seedPlace": 37, "name": "Turner, Isabella", "year": "JR", "team": "Hope College", "std": "NS", "seedTime": "1:10.11"}], "active": true, "day": 3}, {"num": 28, "gender": "Women", "name": "800 Freestyle Relay", "isRelay": true, "entries": [{"seedPlace": 1, "name": "NYU Relay", "year": "", "team": "NYU", "std": "B", "seedTime": "7:14.56"}, {"seedPlace": 2, "name": "Denison Relay", "year": "", "team": "Denison", "std": "B", "seedTime": "7:18.85"}, {"seedPlace": 3, "name": "MIT Relay", "year": "", "team": "MIT", "std": "B", "seedTime": "7:18.87"}, {"seedPlace": 4, "name": "Emory Relay", "year": "", "team": "Emory", "std": "B", "seedTime": "7:20.33"}, {"seedPlace": 5, "name": "Williams Relay", "year": "", "team": "Williams", "std": "B", "seedTime": "7:20.87"}, {"seedPlace": 6, "name": "Kenyon Relay", "year": "", "team": "Kenyon", "std": "B", "seedTime": "7:22.05"}, {"seedPlace": 7, "name": "Pomona-Pitzer Relay", "year": "", "team": "Pomona-Pitzer", "std": "B", "seedTime": "7:23.17"}, {"seedPlace": 8, "name": "Chicago Relay", "year": "", "team": "Chicago", "std": "B", "seedTime": "7:27.47"}, {"seedPlace": 9, "name": "Hope College Relay", "year": "", "team": "Hope College", "std": "B", "seedTime": "7:28.02"}, {"seedPlace": 10, "name": "Tufts Relay", "year": "", "team": "Tufts", "std": "B", "seedTime": "7:28.63"}, {"seedPlace": 11, "name": "Johns Hopkins Relay", "year": "", "team": "Johns Hopkins", "std": "B", "seedTime": "7:28.88"}, {"seedPlace": 12, "name": "Wash U. MO Relay", "year": "", "team": "Wash U. MO", "std": "B", "seedTime": "7:29.23"}, {"seedPlace": 13, "name": "Amherst Relay", "year": "", "team": "Amherst", "std": "B", "seedTime": "7:30.05"}, {"seedPlace": 14, "name": "Swarthmore Relay", "year": "", "team": "Swarthmore", "std": "B", "seedTime": "7:30.19"}, {"seedPlace": 15, "name": "Middlebury Relay", "year": "", "team": "Middlebury", "std": "B", "seedTime": "7:30.31"}, {"seedPlace": 16, "name": "Trinity U. Relay", "year": "", "team": "Trinity U.", "std": "B", "seedTime": "7:31.17"}, {"seedPlace": 17, "name": "Case Western Relay", "year": "", "team": "Case Western", "std": "B", "seedTime": "7:31.59"}, {"seedPlace": 18, "name": "Bowdoin Relay", "year": "", "team": "Bowdoin", "std": "B", "seedTime": "7:32.32"}, {"seedPlace": 19, "name": "Claremont MS Relay", "year": "", "team": "Claremont MS", "std": "B", "seedTime": "7:33.20"}, {"seedPlace": 20, "name": "Gettysburg Relay", "year": "", "team": "Gettysburg", "std": "B", "seedTime": "7:34.48"}, {"seedPlace": 21, "name": "CMU Relay", "year": "", "team": "CMU", "std": "B", "seedTime": "7:37.28"}, {"seedPlace": 22, "name": "Colby Relay", "year": "", "team": "Colby", "std": "NS", "seedTime": "7:38.87"}, {"seedPlace": 23, "name": "UW-L Relay", "year": "", "team": "UW-L", "std": "NS", "seedTime": "7:38.99"}, {"seedPlace": 24, "name": "Mary Washington Relay", "year": "", "team": "Mary Washington", "std": "NS", "seedTime": "7:40.66"}, {"seedPlace": 25, "name": "Calvin Relay", "year": "", "team": "Calvin", "std": "NS", "seedTime": "7:42.81"}, {"seedPlace": 26, "name": "SUNY Geneseo Relay", "year": "", "team": "SUNY Geneseo", "std": "NS", "seedTime": "7:44.01"}, {"seedPlace": 27, "name": "Rensselaer Relay", "year": "", "team": "Rensselaer", "std": "NS", "seedTime": "7:46.14"}], "active": true, "day": 4}, {"num": 30, "gender": "Women", "name": "1650 Freestyle", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Garre, Natalie", "year": "FR", "team": "Bowdoin", "std": "B", "seedTime": "16:31.90"}, {"seedPlace": 2, "name": "Caymaz, Bengisu", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "16:36.97"}, {"seedPlace": 3, "name": "Codd, Lily", "year": "JR", "team": "Williams", "std": "B", "seedTime": "16:49.60"}, {"seedPlace": 4, "name": "Dunn, Madeleine", "year": "JR", "team": "Tufts", "std": "B", "seedTime": "16:49.76"}, {"seedPlace": 5, "name": "Haag, Molly", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "16:50.16"}, {"seedPlace": 6, "name": "Brown, Quinn", "year": "JR", "team": "Denison", "std": "B", "seedTime": "16:53.16"}, {"seedPlace": 7, "name": "Richards, Lauren", "year": "SO", "team": "Chicago", "std": "B", "seedTime": "16:54.43"}, {"seedPlace": 8, "name": "Chatoor, Jada", "year": "SR", "team": "Emory", "std": "B", "seedTime": "16:55.83"}, {"seedPlace": 9, "name": "Marshall, Caitlin", "year": "SR", "team": "NYU", "std": "B", "seedTime": "16:57.83"}, {"seedPlace": 10, "name": "Brown, Nora Lee", "year": "FR", "team": "Kenyon", "std": "B", "seedTime": "16:58.40"}, {"seedPlace": 11, "name": "Main, Morgan", "year": "JR", "team": "Emory", "std": "B", "seedTime": "16:59.47"}, {"seedPlace": 12, "name": "Wala, Aanya", "year": "SO", "team": "NYU", "std": "B", "seedTime": "17:00.34"}, {"seedPlace": 13, "name": "liu, Meredith", "year": "JR", "team": "Emory", "std": "B", "seedTime": "17:01.03"}, {"seedPlace": 14, "name": "Katz, Chloe", "year": "SR", "team": "Middlebury", "std": "B", "seedTime": "17:01.34"}, {"seedPlace": 15, "name": "Chtokolov, Daria", "year": "SO", "team": "NYU", "std": "B", "seedTime": "17:03.31"}, {"seedPlace": 16, "name": "Shaw, Kathryn", "year": "JR", "team": "Claremont MS", "std": "B", "seedTime": "17:03.35"}, {"seedPlace": 17, "name": "Poe, Zoe", "year": "FR", "team": "Calvin", "std": "B", "seedTime": "17:06.43"}, {"seedPlace": 18, "name": "Adler, Yan Yee", "year": "FR", "team": "MIT", "std": "B", "seedTime": "17:08.67"}, {"seedPlace": 19, "name": "Wisner, Taryn", "year": "SR", "team": "Denison", "std": "B", "seedTime": "17:08.77"}, {"seedPlace": 20, "name": "Berry, Ava", "year": "SO", "team": "Gettysburg", "std": "B", "seedTime": "17:14.33"}, {"seedPlace": 21, "name": "Susil, Meghan", "year": "SR", "team": "Johns Hopkins", "std": "B", "seedTime": "17:16.21"}, {"seedPlace": 22, "name": "Kelley, Kyla", "year": "FR", "team": "Williams", "std": "B", "seedTime": "17:17.40"}, {"seedPlace": 23, "name": "Hosack, Molly", "year": "JR", "team": "UWEC", "std": "B", "seedTime": "17:18.08"}, {"seedPlace": 24, "name": "Schmidt, Revere", "year": "SO", "team": "Claremont MS", "std": "B", "seedTime": "17:18.17"}, {"seedPlace": 25, "name": "Tropper, Stephanie", "year": "SR", "team": "Bates", "std": "B", "seedTime": "17:19.16"}, {"seedPlace": 26, "name": "Giordano, Sofia", "year": "SO", "team": "Kenyon", "std": "B", "seedTime": "17:21.05"}, {"seedPlace": 27, "name": "Scharpf, Alexandra", "year": "FR", "team": "CMU", "std": "NS", "seedTime": "17:28.90"}, {"seedPlace": 28, "name": "McCarty, Cierra", "year": "SR", "team": "Tufts", "std": "NS", "seedTime": "17:30.68"}, {"seedPlace": 29, "name": "Muller, Emery", "year": "JR", "team": "NYU", "std": "NS", "seedTime": "17:34.94"}], "active": true, "day": 4}, {"num": 32, "gender": "Women", "name": "100 Freestyle", "isRelay": false, "entries": [{"seedPlace": 1, "name": "McIntyre, Kaley", "year": "JR", "team": "NYU", "std": "B", "seedTime": "48.58"}, {"seedPlace": 2, "name": "Roberson, Ella", "year": "SO", "team": "MIT", "std": "B", "seedTime": "49.52"}, {"seedPlace": 3, "name": "Wasiniak, Laurel", "year": "JR", "team": "Hope College", "std": "B", "seedTime": "49.71"}, {"seedPlace": 4, "name": "Mello, Valerie", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "49.95"}, {"seedPlace": 5, "name": "Fathman, Hannah", "year": "SR", "team": "Albion", "std": "B", "seedTime": "50.03"}, {"seedPlace": 6, "name": "Gidley, Greta", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "50.14"}, {"seedPlace": 7, "name": "Benson, Amy", "year": "SO", "team": "Trinity U.", "std": "B", "seedTime": "50.18"}, {"seedPlace": 8, "name": "Xu, Emily", "year": "JR", "team": "Chicago", "std": "B", "seedTime": "50.20"}, {"seedPlace": 9, "name": "Aballea, Nina", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "50.50"}, {"seedPlace": 10, "name": "Ranile, Nicole", "year": "JR", "team": "NYU", "std": "B", "seedTime": "50.52"}, {"seedPlace": 11, "name": "Turvey, Alexandra", "year": "GRAD", "team": "MIT", "std": "B", "seedTime": "50.52"}, {"seedPlace": 12, "name": "Cudney, Jillian", "year": "GRAD", "team": "Tufts", "std": "B", "seedTime": "50.66"}, {"seedPlace": 13, "name": "Turner, Isabella", "year": "JR", "team": "Hope College", "std": "B", "seedTime": "50.72"}, {"seedPlace": 14, "name": "Kadlecik, Grace", "year": "SR", "team": "Denison", "std": "B", "seedTime": "50.80"}, {"seedPlace": 15, "name": "Chambers, Gabriella", "year": "SR", "team": "Case Western", "std": "B", "seedTime": "50.80"}, {"seedPlace": 16, "name": "Wendt, Louisa", "year": "FR", "team": "Emory", "std": "B", "seedTime": "50.88"}, {"seedPlace": 17, "name": "McGrew, Anna", "year": "FR", "team": "Middlebury", "std": "B", "seedTime": "50.89"}, {"seedPlace": 18, "name": "Coppo, Francesca", "year": "SO", "team": "Pomona-Pitzer", "std": "B", "seedTime": "50.89"}, {"seedPlace": 19, "name": "Helm, Penelope", "year": "GRAD", "team": "Emory", "std": "B", "seedTime": "50.91"}, {"seedPlace": 20, "name": "Collins, Genine", "year": "SO", "team": "Swarthmore", "std": "B", "seedTime": "50.97"}, {"seedPlace": 21, "name": "Zhao, Karen", "year": "SR", "team": "Chicago", "std": "B", "seedTime": "50.97"}, {"seedPlace": 22, "name": "Schiro, Francesca", "year": "SR", "team": "UW-Oshkosh", "std": "B", "seedTime": "50.98"}, {"seedPlace": 23, "name": "Crysel, Caitlin", "year": "FR", "team": "Emory", "std": "B", "seedTime": "50.99"}, {"seedPlace": 24, "name": "Anthony, Elle", "year": "JR", "team": "Swarthmore", "std": "B", "seedTime": "51.00"}, {"seedPlace": 25, "name": "Geboy, Sydney", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "51.01"}, {"seedPlace": 26, "name": "Marco, Eliza", "year": "FR", "team": "Colby", "std": "B", "seedTime": "51.04"}, {"seedPlace": 27, "name": "Wheeler, Quinci", "year": "JR", "team": "Tufts", "std": "B", "seedTime": "51.05"}, {"seedPlace": 28, "name": "Smith, Sydney", "year": "SO", "team": "MIT", "std": "B", "seedTime": "51.09"}, {"seedPlace": 29, "name": "Sotek, Alexandra", "year": "SO", "team": "SUNY Geneseo", "std": "B", "seedTime": "51.10"}, {"seedPlace": 30, "name": "Vogen, Avery", "year": "SR", "team": "Denison", "std": "B", "seedTime": "51.15"}, {"seedPlace": 31, "name": "Kennedy, Ava", "year": "SR", "team": "Emory", "std": "B", "seedTime": "51.17"}, {"seedPlace": 32, "name": "Peralta, Rourke", "year": "JR", "team": "Montclair St.", "std": "B", "seedTime": "51.19"}, {"seedPlace": 33, "name": "Sonday, Sydney", "year": "SR", "team": "Calvin", "std": "B", "seedTime": "51.20"}, {"seedPlace": 34, "name": "Ferguson, Phoebe", "year": "JR", "team": "Denison", "std": "B", "seedTime": "51.20"}, {"seedPlace": 35, "name": "Torrecillas-Jouault, Lisa", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "51.22"}, {"seedPlace": 36, "name": "Croonquist, Amber", "year": "SR", "team": "Denison", "std": "B", "seedTime": "51.28"}, {"seedPlace": 37, "name": "Naveen, Annika", "year": "JR", "team": "MIT", "std": "B", "seedTime": "51.29"}, {"seedPlace": 38, "name": "Morse, Olivia", "year": "SO", "team": "Denison", "std": "B", "seedTime": "51.34"}, {"seedPlace": 39, "name": "Motekaitis, Elle", "year": "GRAD", "team": "NYU", "std": "B", "seedTime": "51.35"}, {"seedPlace": 40, "name": "Brown, Shannon", "year": "SR", "team": "Rensselaer", "std": "B", "seedTime": "51.38"}, {"seedPlace": 41, "name": "Arnold, Paige", "year": "SO", "team": "Amherst", "std": "B", "seedTime": "51.41"}, {"seedPlace": 42, "name": "Lee, Sophia", "year": "FR", "team": "Chicago", "std": "B", "seedTime": "51.41"}, {"seedPlace": 43, "name": "Cohen, Elizabeth", "year": "SO", "team": "Johns Hopkins", "std": "NS", "seedTime": "51.43"}, {"seedPlace": 44, "name": "Kan, Madeleine", "year": "JR", "team": "Claremont MS", "std": "NS", "seedTime": "51.47"}, {"seedPlace": 45, "name": "Oldham, Isabel", "year": "SR", "team": "NYU", "std": "NS", "seedTime": "51.47"}, {"seedPlace": 46, "name": "Kozma, Claire", "year": "JR", "team": "Case Western", "std": "NS", "seedTime": "51.61"}, {"seedPlace": 47, "name": "Er, Melissa", "year": "FR", "team": "Johns Hopkins", "std": "NS", "seedTime": "51.87"}, {"seedPlace": 48, "name": "Stone, Garin", "year": "JR", "team": "Wheaton MA", "std": "NS", "seedTime": "51.89"}, {"seedPlace": 49, "name": "Boorjian, Natalie", "year": "SO", "team": "Emory", "std": "NS", "seedTime": "51.93"}, {"seedPlace": 50, "name": "Pfeufer, Anna", "year": "SR", "team": "Denison", "std": "NS", "seedTime": "51.96"}, {"seedPlace": 51, "name": "Ryle, Lauren", "year": "SR", "team": "Hope College", "std": "NS", "seedTime": "52.09"}, {"seedPlace": 52, "name": "Veerapaneni, Jaya", "year": "FR", "team": "Johns Hopkins", "std": "NS", "seedTime": "52.34"}, {"seedPlace": 53, "name": "Miller, Kelsie", "year": "SO", "team": "St. Mary's MD", "std": "NS", "seedTime": "52.68"}, {"seedPlace": 54, "name": "Leopold, Mary", "year": "SO", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "52.90"}, {"seedPlace": 55, "name": "Gomez, Reina", "year": "SO", "team": "NYU", "std": "NS", "seedTime": "53.35"}, {"seedPlace": 56, "name": "Smyrniou, Angel", "year": "FR", "team": "Tufts", "std": "NS", "seedTime": "53.58"}, {"seedPlace": 57, "name": "Xayaveth, Hope", "year": "SO", "team": "NYU", "std": "NS", "seedTime": "53.68"}, {"seedPlace": 58, "name": "Wray-Raabolle, Verity", "year": "SR", "team": "Macalester", "std": "NS", "seedTime": "55.71"}, {"seedPlace": 59, "name": "Smythe, Paxton", "year": "JR", "team": "Rhodes", "std": "NS", "seedTime": "57.48"}], "active": true, "day": 4}, {"num": 34, "gender": "Women", "name": "200 Backstroke", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Augustyn, Kate", "year": "SR", "team": "MIT", "std": "B", "seedTime": "1:58.23"}, {"seedPlace": 2, "name": "Kraus, Sara", "year": "SR", "team": "Hope College", "std": "B", "seedTime": "1:58.29"}, {"seedPlace": 3, "name": "Pennington, Elizabeth", "year": "JR", "team": "Rowan", "std": "B", "seedTime": "1:58.59"}, {"seedPlace": 4, "name": "Lee, Kennedy", "year": "FR", "team": "Johns Hopkins", "std": "B", "seedTime": "1:59.02"}, {"seedPlace": 5, "name": "Robins, Clementine", "year": "SO", "team": "Williams", "std": "B", "seedTime": "1:59.27"}, {"seedPlace": 6, "name": "Verkleeren, Sophia", "year": "SR", "team": "Williams", "std": "B", "seedTime": "2:00.07"}, {"seedPlace": 7, "name": "Jungers, Megan", "year": "GRAD", "team": "Emory", "std": "B", "seedTime": "2:00.12"}, {"seedPlace": 8, "name": "Greeneway, Allison", "year": "FR", "team": "Emory", "std": "B", "seedTime": "2:00.12"}, {"seedPlace": 9, "name": "Merkel, Emma", "year": "SO", "team": "Calvin", "std": "B", "seedTime": "2:00.25"}, {"seedPlace": 10, "name": "Forest, Elisabella", "year": "SR", "team": "Chicago", "std": "B", "seedTime": "2:00.34"}, {"seedPlace": 11, "name": "Xu, Savannah", "year": "JR", "team": "CMU", "std": "B", "seedTime": "2:00.43"}, {"seedPlace": 12, "name": "Yoon, Isabelle", "year": "FR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:00.61"}, {"seedPlace": 13, "name": "Durak, Anna", "year": "GRAD", "team": "Loras", "std": "B", "seedTime": "2:00.73"}, {"seedPlace": 14, "name": "Sanderson, Jane", "year": "JR", "team": "Emory", "std": "B", "seedTime": "2:00.79"}, {"seedPlace": 15, "name": "Chambers, Noa", "year": "FR", "team": "Tufts", "std": "B", "seedTime": "2:00.79"}, {"seedPlace": 16, "name": "Lynch, Calista", "year": "SO", "team": "NYU", "std": "B", "seedTime": "2:00.93"}, {"seedPlace": 17, "name": "Ramirez, Caroline", "year": "FR", "team": "Denison", "std": "B", "seedTime": "2:00.94"}, {"seedPlace": 18, "name": "Celtnieks, Penelope", "year": "JR", "team": "Emory", "std": "B", "seedTime": "2:01.13"}, {"seedPlace": 19, "name": "Dixon, Charlotte", "year": "FR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:01.28"}, {"seedPlace": 20, "name": "White, Alden", "year": "SO", "team": "Williams", "std": "B", "seedTime": "2:01.33"}, {"seedPlace": 21, "name": "Yang, Irene", "year": "JR", "team": "Williams", "std": "B", "seedTime": "2:01.41"}, {"seedPlace": 22, "name": "Hermann, Katie", "year": "JR", "team": "Hope College", "std": "B", "seedTime": "2:01.48"}, {"seedPlace": 23, "name": "Georgopoulou, Ioanna", "year": "SR", "team": "Chicago", "std": "B", "seedTime": "2:01.65"}, {"seedPlace": 24, "name": "Barrientos, Isabella", "year": "SR", "team": "Wash U. MO", "std": "B", "seedTime": "2:01.68"}, {"seedPlace": 25, "name": "Eisenbeis, Gwenyth", "year": "JR", "team": "Kenyon", "std": "B", "seedTime": "2:02.01"}, {"seedPlace": 26, "name": "Roche, Alison", "year": "JR", "team": "Wash U. MO", "std": "B", "seedTime": "2:02.30"}, {"seedPlace": 27, "name": "Hartmann, Reese", "year": "SR", "team": "Wheaton MA", "std": "B", "seedTime": "2:02.54"}, {"seedPlace": 28, "name": "Crane, Jessica", "year": "FR", "team": "MIT", "std": "B", "seedTime": "2:02.64"}, {"seedPlace": 29, "name": "Morreale, Mia", "year": "JR", "team": "Gettysburg", "std": "B", "seedTime": "2:02.79"}, {"seedPlace": 30, "name": "Sherman, Amaia", "year": "FR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:03.02"}, {"seedPlace": 31, "name": "Park, Jasmine", "year": "SO", "team": "Denison", "std": "B", "seedTime": "2:03.03"}, {"seedPlace": 32, "name": "Coates, Nina", "year": "FR", "team": "Colby", "std": "NS", "seedTime": "2:03.36"}, {"seedPlace": 33, "name": "Yazici, Ceyda", "year": "JR", "team": "Kenyon", "std": "NS", "seedTime": "2:03.41"}, {"seedPlace": 34, "name": "Hahlen, Jordyn", "year": "SR", "team": "UW-L", "std": "NS", "seedTime": "2:03.48"}, {"seedPlace": 35, "name": "SINGH, Gaurika", "year": "SR", "team": "Tufts", "std": "NS", "seedTime": "2:03.62"}, {"seedPlace": 36, "name": "Yang, Iris", "year": "SR", "team": "MIT", "std": "NS", "seedTime": "2:03.93"}, {"seedPlace": 37, "name": "McKenzie, Delanie", "year": "SO", "team": "Gettysburg", "std": "NS", "seedTime": "2:04.36"}, {"seedPlace": 38, "name": "Widmer, Ashlyn", "year": "SO", "team": "Kenyon", "std": "NS", "seedTime": "2:04.44"}, {"seedPlace": 39, "name": "Jones, Kathryn", "year": "SO", "team": "Pomona-Pitzer", "std": "NS", "seedTime": "2:05.55"}, {"seedPlace": 40, "name": "Pritchett, Emma", "year": "SR", "team": "Denison", "std": "NS", "seedTime": "2:06.04"}, {"seedPlace": 41, "name": "Wilson, Braelyn", "year": "FR", "team": "Kean University", "std": "NS", "seedTime": "2:07.08"}], "active": true, "day": 4}, {"num": 36, "gender": "Women", "name": "200 Breaststroke", "isRelay": false, "entries": [{"seedPlace": 1, "name": "Fadely, Jennah", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "2:11.53"}, {"seedPlace": 2, "name": "Wei, Gabriella", "year": "SR", "team": "Kenyon", "std": "B", "seedTime": "2:12.21"}, {"seedPlace": 3, "name": "Thielking, Drue", "year": "JR", "team": "Denison", "std": "B", "seedTime": "2:13.05"}, {"seedPlace": 4, "name": "Wishnack, Charlotte", "year": "SR", "team": "Williams", "std": "B", "seedTime": "2:13.50"}, {"seedPlace": 5, "name": "Bernard, Sarah", "year": "FR", "team": "MIT", "std": "B", "seedTime": "2:13.50"}, {"seedPlace": 6, "name": "Cohen, Katie", "year": "SO", "team": "Emory", "std": "B", "seedTime": "2:15.38"}, {"seedPlace": 7, "name": "Roebuck, Carter", "year": "SO", "team": "Williams", "std": "B", "seedTime": "2:16.00"}, {"seedPlace": 8, "name": "Lacroix, Allison", "year": "SR", "team": "Amherst", "std": "B", "seedTime": "2:16.13"}, {"seedPlace": 9, "name": "Van Eldik, Kelsey", "year": "FR", "team": "Kenyon", "std": "B", "seedTime": "2:16.73"}, {"seedPlace": 10, "name": "JOOS, SOPHIA", "year": "FR", "team": "Emory", "std": "B", "seedTime": "2:17.02"}, {"seedPlace": 11, "name": "Lu, Madison", "year": "FR", "team": "Emory", "std": "B", "seedTime": "2:17.03"}, {"seedPlace": 12, "name": "Soosai, Alicia", "year": "JR", "team": "Chicago", "std": "B", "seedTime": "2:17.19"}, {"seedPlace": 13, "name": "Palmer, Sarah", "year": "SO", "team": "Bates", "std": "B", "seedTime": "2:17.46"}, {"seedPlace": 14, "name": "Rohovit, Taylor", "year": "SR", "team": "Johns Hopkins", "std": "B", "seedTime": "2:17.70"}, {"seedPlace": 15, "name": "Burns, Neely", "year": "JR", "team": "Trinity U.", "std": "B", "seedTime": "2:18.00"}, {"seedPlace": 16, "name": "Appl, Emmie", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:18.13"}, {"seedPlace": 17, "name": "Brink, Audrey", "year": "FR", "team": "Denison", "std": "B", "seedTime": "2:18.18"}, {"seedPlace": 18, "name": "Li, Anna", "year": "SR", "team": "NYU", "std": "B", "seedTime": "2:18.46"}, {"seedPlace": 19, "name": "Liu, Michelle", "year": "SR", "team": "Johns Hopkins", "std": "B", "seedTime": "2:18.51"}, {"seedPlace": 20, "name": "Lamb, Nina", "year": "SR", "team": "Springfield", "std": "B", "seedTime": "2:18.55"}, {"seedPlace": 21, "name": "Murphree, Charlotte", "year": "SO", "team": "Trinity C.", "std": "B", "seedTime": "2:18.66"}, {"seedPlace": 22, "name": "McCallie, Sydney", "year": "GRAD", "team": "Salisbury", "std": "B", "seedTime": "2:18.68"}, {"seedPlace": 23, "name": "Shaffer, Elizabeth", "year": "SO", "team": "CMU", "std": "B", "seedTime": "2:19.35"}, {"seedPlace": 24, "name": "McEver, Ella", "year": "SO", "team": "Chicago", "std": "B", "seedTime": "2:19.37"}, {"seedPlace": 25, "name": "Mottl, Kellen", "year": "JR", "team": "Colby", "std": "B", "seedTime": "2:19.42"}, {"seedPlace": 26, "name": "Calvi, Gabriella", "year": "SR", "team": "Pomona-Pitzer", "std": "B", "seedTime": "2:19.45"}, {"seedPlace": 27, "name": "Zagrobelny, Bridget", "year": "SR", "team": "Mary Washington", "std": "B", "seedTime": "2:19.51"}, {"seedPlace": 28, "name": "Tofflemire, Riley", "year": "SO", "team": "Denison", "std": "B", "seedTime": "2:19.63"}, {"seedPlace": 29, "name": "Klemm, Isabella", "year": "JR", "team": "YCP", "std": "B", "seedTime": "2:19.65"}, {"seedPlace": 30, "name": "Smith, Mattie", "year": "SR", "team": "Albion", "std": "B", "seedTime": "2:19.97"}, {"seedPlace": 31, "name": "Rotival, Sophie", "year": "SR", "team": "Swarthmore", "std": "NS", "seedTime": "2:21.05"}, {"seedPlace": 32, "name": "Lee, Hannah", "year": "SO", "team": "Wash U. MO", "std": "NS", "seedTime": "2:21.82"}], "active": true, "day": 4}, {"num": 39, "gender": "Women", "name": "400 Freestyle Relay", "isRelay": true, "entries": [{"seedPlace": 1, "name": "NYU Relay", "year": "", "team": "NYU", "std": "B", "seedTime": "3:20.04"}, {"seedPlace": 2, "name": "MIT Relay", "year": "", "team": "MIT", "std": "B", "seedTime": "3:20.74"}, {"seedPlace": 3, "name": "Kenyon Relay", "year": "", "team": "Kenyon", "std": "B", "seedTime": "3:21.39"}, {"seedPlace": 4, "name": "Pomona-Pitzer Relay", "year": "", "team": "Pomona-Pitzer", "std": "B", "seedTime": "3:21.54"}, {"seedPlace": 5, "name": "Denison Relay", "year": "", "team": "Denison", "std": "B", "seedTime": "3:21.66"}, {"seedPlace": 6, "name": "Hope College Relay", "year": "", "team": "Hope College", "std": "B", "seedTime": "3:22.41"}, {"seedPlace": 7, "name": "Emory Relay", "year": "", "team": "Emory", "std": "B", "seedTime": "3:23.06"}, {"seedPlace": 8, "name": "Chicago Relay", "year": "", "team": "Chicago", "std": "B", "seedTime": "3:23.70"}, {"seedPlace": 9, "name": "Tufts Relay", "year": "", "team": "Tufts", "std": "B", "seedTime": "3:23.78"}, {"seedPlace": 10, "name": "Calvin Relay", "year": "", "team": "Calvin", "std": "B", "seedTime": "3:24.73"}, {"seedPlace": 11, "name": "Williams Relay", "year": "", "team": "Williams", "std": "B", "seedTime": "3:24.82"}, {"seedPlace": 12, "name": "Johns Hopkins Relay", "year": "", "team": "Johns Hopkins", "std": "B", "seedTime": "3:25.71"}, {"seedPlace": 13, "name": "Case Western Relay", "year": "", "team": "Case Western", "std": "B", "seedTime": "3:25.75"}, {"seedPlace": 14, "name": "Amherst Relay", "year": "", "team": "Amherst", "std": "B", "seedTime": "3:26.12"}, {"seedPlace": 15, "name": "Swarthmore Relay", "year": "", "team": "Swarthmore", "std": "B", "seedTime": "3:26.29"}, {"seedPlace": 16, "name": "Colby Relay", "year": "", "team": "Colby", "std": "B", "seedTime": "3:26.29"}, {"seedPlace": 17, "name": "Trinity U. Relay", "year": "", "team": "Trinity U.", "std": "B", "seedTime": "3:26.30"}, {"seedPlace": 18, "name": "Rensselaer Relay", "year": "", "team": "Rensselaer", "std": "B", "seedTime": "3:26.67"}, {"seedPlace": 19, "name": "Gettysburg Relay", "year": "", "team": "Gettysburg", "std": "B", "seedTime": "3:27.29"}, {"seedPlace": 20, "name": "Claremont MS Relay", "year": "", "team": "Claremont MS", "std": "B", "seedTime": "3:27.55"}, {"seedPlace": 21, "name": "SUNY Geneseo Relay", "year": "", "team": "SUNY Geneseo", "std": "NS", "seedTime": "3:29.55"}, {"seedPlace": 22, "name": "Middlebury Relay", "year": "", "team": "Middlebury", "std": "NS", "seedTime": "3:29.76"}, {"seedPlace": 23, "name": "Hamilton Relay", "year": "", "team": "Hamilton", "std": "NS", "seedTime": "3:29.91"}, {"seedPlace": 24, "name": "Wash U. MO Relay", "year": "", "team": "Wash U. MO", "std": "NS", "seedTime": "3:29.98"}, {"seedPlace": 25, "name": "CMU Relay", "year": "", "team": "CMU", "std": "NS", "seedTime": "3:30.46"}, {"seedPlace": 26, "name": "W&L Relay", "year": "", "team": "W&L", "std": "NS", "seedTime": "3:30.57"}, {"seedPlace": 27, "name": "UW-L Relay", "year": "", "team": "UW-L", "std": "NS", "seedTime": "3:31.28"}, {"seedPlace": 28, "name": "Bowdoin Relay", "year": "", "team": "Bowdoin", "std": "NS", "seedTime": "3:31.42"}, {"seedPlace": 29, "name": "Mary Washington Relay", "year": "", "team": "Mary Washington", "std": "NS", "seedTime": "3:32.58"}], "active": true, "day": 4}], "teams": ["Albion", "Amherst", "Bates", "Bowdoin", "CMU", "Calvin", "Case Western", "Centre College", "Chapman", "Chicago", "Claremont MS", "Colby", "Denison", "Emory", "Gettysburg", "Hamilton", "Hope College", "Johns Hopkins", "Kean University", "Kenyon", "Loras", "MIT", "Macalester", "Mary Washington", "Middlebury", "Montclair St.", "NYU", "Pomona-Pitzer", "Rensselaer", "Rhodes", "Rowan", "SUNY Geneseo", "Salisbury", "Springfield", "St. Mary's MD", "Swarthmore", "Trinity C.", "Trinity U.", "Tufts", "UW-L", "UW-Oshkosh", "UWEC", "W&L", "Wash U. MO", "Wheaton IL", "Wheaton MA", "Williams", "Wooster", "YCP"]};
+
+
+init();
+</script>
+</body>
+</html>
