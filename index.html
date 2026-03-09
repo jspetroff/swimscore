@@ -418,7 +418,18 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
         <div class="card">
           <div class="ct">Clinch Status</div>
           <div id="clinch" class="cb cn">Loading...</div>
-          <div style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem">Points remaining for 1st place: <strong id="avail">—</strong></div>
+          <div style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem;margin-bottom:.875rem">Points remaining for 1st place: <strong id="avail">—</strong></div>
+          <div style="overflow-x:auto">
+            <table class="lb" style="border-collapse:collapse">
+              <thead><tr>
+                <th style="position:sticky;top:0;background:var(--bg2)">#</th>
+                <th style="position:sticky;top:0;background:var(--bg2)">Team</th>
+                <th style="position:sticky;top:0;background:var(--bg2)">Points</th>
+                <th style="position:sticky;top:0;background:var(--bg2)">Gap to You</th>
+              </tr></thead>
+              <tbody id="clinchTbl"></tbody>
+            </table>
+          </div>
         </div>
       </div>
       <div class="card">
@@ -1213,18 +1224,20 @@ function renderLiveEvs(){
     var pts=mpts(ev.isRelay);
     var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
     var prows='';
-    prows+='<div class="pr" style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim)"><span>PL</span><span>Result</span><span>Psych</span><span>Scr</span></div>';
+    prows+='<div class="pr" style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto"><span>PL</span><span>Result</span><span>Psych</span><span>TIE</span><span>SCR</span></div>';
     for(var rk=0;rk<pts.length;rk++){
       var r=res[rk]||{},ps=entries[rk]||{};
       var tm=r.team!==undefined?r.team:(ps.team||'');
       var sc2=r.scratch?'checked':'';
+      var tie2=r.tie?'checked':'';
       var opts='<option value="">—</option>';
       S.activeTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
-      prows+='<div class="pr">';
+      prows+='<div class="pr" style="grid-template-columns:32px 1fr 1fr auto auto">';
       prows+='<span class="pn">'+(rk+1)+'</span>';
       prows+='<select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>';
-      prows+='<span style="color:var(--text-dim);font-size:.7rem">'+esc(ps.team||'—')+'</span>';
-      prows+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"> SCR</label>';
+      prows+='<span style="color:var(--text-dim);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ps.team||'—')+'</span>';
+      prows+='<label class="sc" title="Ties with place above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
+      prows+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
       prows+='</div>';
     }
     var stcls=any?'partial':'pending';
@@ -1239,8 +1252,11 @@ function renderLiveEvs(){
     h+='</div>';
     h+='<div class="eb" id="eb'+gi+'">';
     h+='<div class="pg">'+prows+'</div>';
-    h+='<div style="margin-top:.8rem"><button class="btn bsm" onclick="mkDone('+gi+')">Mark Done</button> <button class="btn bto bsm" onclick="clrEv('+gi+')">Clear</button></div>';
-    h+='</div></div>';
+    h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center">';
+    h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">&#9654; Goes Chalk</button>';
+    h+='<button class="btn bsm" onclick="clrEv('+gi+')">Clear</button>';
+    h+='<span style="font-size:.68rem;color:var(--text-dim);font-family:var(--fm)">TIE = ties with place above &middot; SCR = scratch</span>';
+    h+='</div></div></div>';
   });
   document.getElementById('lev').innerHTML=h;
 }
@@ -1259,23 +1275,28 @@ function setLR(gi,rk,f,v){
 function mkDone(gi){
   var ev=S.events[gi];
   if(!ev)return;
-  // Auto-fill results from psych sheet seed order if not already entered
   var pts=mpts(ev.isRelay);
   var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
   if(!S.liveResults[gi])S.liveResults[gi]=[];
   for(var rk=0;rk<pts.length;rk++){
-    // Only auto-fill slots not already manually set
     if(!S.liveResults[gi][rk]||!S.liveResults[gi][rk].team){
       var en=entries[rk];
-      S.liveResults[gi][rk]=en?{team:en.team,scratch:false}:{team:'',scratch:false};
+      S.liveResults[gi][rk]=en?{team:en.team,scratch:false,tie:false}:{team:'',scratch:false,tie:false};
     }
   }
   save();
-  // Update visual status
-  var eh=document.getElementById('eh'+gi);if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('done');}
-  var epb=document.getElementById('epb'+gi);if(epb)epb.textContent='\u2713 done';
-  // Re-render event row so dropdowns reflect auto-filled values
-  renderLiveEvs();updLB();updClinch();
+  // Update just this event's header — don't re-render entire list
+  var eh=document.getElementById('eh'+gi);
+  if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('done');}
+  var epb=document.getElementById('epb'+gi);
+  if(epb)epb.textContent='\u2713 done';
+  // Update dropdowns in place without collapsing accordion
+  var pts2=mpts(ev.isRelay);
+  for(var rk2=0;rk2<pts2.length;rk2++){
+    var sel=document.querySelector('#eb'+gi+' .pg .pr:nth-child('+(rk2+2)+') select');
+    if(sel&&S.liveResults[gi][rk2]){sel.value=S.liveResults[gi][rk2].team||'';}
+  }
+  updLB();updClinch();
 }
 
 function clrEv(gi){delete S.liveResults[gi];save();renderLiveEvs();updLB();updClinch();}
@@ -1286,11 +1307,33 @@ function liveScores(){
   Object.keys(S.liveResults).forEach(function(gis){
     var gi=parseInt(gis),ev=S.events[gi];
     if(!ev||!ev.active)return;
-    var pts=mpts(ev.isRelay),res=S.liveResults[gi],rk=0;
-    res.forEach(function(x){
+    var pts=mpts(ev.isRelay);
+    var res=S.liveResults[gi];
+    // Build list of non-scratched finishers with their place index
+    var finishers=[];
+    res.forEach(function(x,rk){
       if(!x||x.scratch||!x.team)return;
-      if(rk<pts.length&&sc[x.team]!==undefined){sc[x.team]+=pts[rk];rk++;}
+      finishers.push({team:x.team,rk:rk,tie:!!x.tie});
     });
+    // Score with tie averaging: find tie groups
+    var i=0;
+    while(i<finishers.length){
+      var rk=finishers[i].rk;
+      if(rk>=pts.length){i++;continue;}
+      // Find how many are tied at this position (next entries marked tie:true)
+      var j=i+1;
+      while(j<finishers.length&&finishers[j].tie&&finishers[j].rk<pts.length)j++;
+      var tieCount=j-i;
+      // Average points across tied places
+      var psum=0;
+      for(var k=rk;k<Math.min(rk+tieCount,pts.length);k++)psum+=pts[k];
+      var sp=psum/tieCount;
+      for(var k=i;k<j;k++){
+        var t=finishers[k].team;
+        if(sc[t]!==undefined)sc[t]+=sp;
+      }
+      i=j;
+    }
   });
   return sc;
 }
@@ -1468,21 +1511,46 @@ function updLB(){
 
 function updClinch(){
   var sc=liveScores(),home=S.homeTeam,hs=sc[home]||0;
-  var rivals=Object.keys(sc).filter(function(t){return t!==home;}).map(function(t){return[t,sc[t]];}).sort(function(a,b){return b[1]-a[1];});
-  var rn=rivals.length?rivals[0][0]:'Rival',rs=rivals.length?rivals[0][1]:0;
+  var allTeams=Object.keys(sc).map(function(t){return{team:t,pts:sc[t]||0};}).sort(function(a,b){return b.pts-a.pts;});
+  var homeRank=allTeams.findIndex(function(x){return x.team===home;})+1;
+
+  // Points remaining
   var done={};
   Object.keys(S.liveResults).forEach(function(gi){done[parseInt(gi)]=1;});
   var rem=actEvs('full').filter(function(ev){return!done[S.events.indexOf(ev)];});
   var avail=0;rem.forEach(function(ev){var p=mpts(ev.isRelay);avail+=p[0]||0;});
   document.getElementById('avail').textContent=avail.toFixed(0)+' pts';
-  var gap=hs-rs;
+
+  // Clinch banner
+  var leader=allTeams[0]||{team:'—',pts:0};
+  var gap=hs-leader.pts;
   var el=document.getElementById('clinch');
   var msg='';
-  if(gap>avail){msg='&#9989; '+home+' clinches! Lead: +'+gap.toFixed(1);el.className='cb cw';}
-  else if(gap>0){msg='&#128994; '+home+' leads '+rn+' by '+gap.toFixed(1)+' pts';el.className='cb cn';}
-  else if(gap===0&&hs===0){msg='&#9203; Meet not started';el.className='cb cn';}
-  else{msg='&#128308; '+home+' trails '+rn+' by '+Math.abs(gap).toFixed(1)+' pts';el.className='cb cl2';}
+  if(hs===0&&leader.pts===0){msg='&#9203; Meet not started';el.className='cb cn';}
+  else if(homeRank===1&&gap>avail){msg='&#9989; '+home+' clinches! Lead: +'+gap.toFixed(1)+' pts';el.className='cb cw';}
+  else if(homeRank===1){msg='&#128994; '+home+' leads by '+gap.toFixed(1)+' pts';el.className='cb cn';}
+  else{msg='&#128308; '+home+' is '+homeRank+(homeRank===2?'nd':homeRank===3?'rd':'th')+', trails '+leader.team+' by '+Math.abs(gap).toFixed(1)+' pts';el.className='cb cl2';}
   el.innerHTML=msg;
+
+  // Top-10 standings table
+  var top=allTeams.slice(0,10);
+  var th='';
+  top.forEach(function(row,i){
+    var isHome=row.team===home;
+    var gapToHome=row.pts-hs;
+    var gapStr=isHome?'<span style="color:var(--text-dim)">—</span>':
+      gapToHome>0?'<span style="color:var(--red)">+'+gapToHome.toFixed(1)+' ahead</span>':
+      '<span style="color:var(--green)">'+gapToHome.toFixed(1)+'</span>';
+    var rc=i===0?'r1':i===1?'r2':i===2?'r3':'rx';
+    th+='<tr class="'+(isHome?'ht':'')+'">';
+    th+='<td><span class="rb '+rc+'">'+(i+1)+'</span></td>';
+    th+='<td>'+esc(row.team)+(isHome?' &#127968;':'')+'</td>';
+    th+='<td><strong>'+row.pts.toFixed(1)+'</strong></td>';
+    th+='<td>'+gapStr+'</td>';
+    th+='</tr>';
+  });
+  var tbl=document.getElementById('clinchTbl');
+  if(tbl)tbl.innerHTML=th;
 }
 
 // ── MEET MANAGER UI ───────────────────────────────────────────────────────
