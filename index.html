@@ -4,6 +4,37 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SwimScore</title>
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyALXznGsNQaeNOGmwG5EHOa0XONWy6EZfA",
+    authDomain: "swimscore-60e16.firebaseapp.com",
+    projectId: "swimscore-60e16",
+    storageBucket: "swimscore-60e16.firebasestorage.app",
+    messagingSenderId: "76892354791",
+    appId: "1:76892354791:web:3572467104e1be76980a42",
+    measurementId: "G-YB1S42CXBR"
+  };
+
+  const fbApp = initializeApp(firebaseConfig);
+  const db = getFirestore(fbApp);
+
+  // Expose Firestore helpers to global scope for use in main scripts
+  window._db = db;
+  window._fsDoc = doc;
+  window._fsCollection = collection;
+  window._fsSetDoc = setDoc;
+  window._fsDeleteDoc = deleteDoc;
+  window._fsOnSnapshot = onSnapshot;
+  window._fsGetDoc = getDoc;
+  window._fbReady = true;
+
+  // Signal that Firebase is ready
+  document.dispatchEvent(new Event('firebase-ready'));
+</script>
 <style>
 :root{
   --bg:#0f1117;--bg2:#171b24;--bg3:#1e2330;--border:#2a3045;
@@ -163,6 +194,16 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .bmeets{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.4rem .875rem;border-radius:6px;cursor:pointer;font-size:.75rem;font-family:var(--fm);letter-spacing:.05em;transition:all .2s;white-space:nowrap;}
 .bmeets:hover{border-color:var(--gold);color:var(--gold);}
 .active-badge{font-size:.6rem;font-family:var(--fm);background:var(--gold);color:#0f1117;padding:.15rem .4rem;border-radius:3px;font-weight:700;letter-spacing:.06em;}
+
+/* Sync status */
+.sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:.4rem;flex-shrink:0;}
+.sync-ok{background:var(--green);}
+.sync-err{background:var(--red);}
+.sync-wait{background:var(--gold);animation:pulse .8s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+.sync-bar{display:flex;align-items:center;font-size:.7rem;font-family:var(--fm);color:var(--text-dim);gap:.25rem;margin-left:.75rem;}
+.share-link{font-size:.72rem;font-family:var(--fm);color:var(--gold);cursor:pointer;text-decoration:underline;margin-left:.5rem;}
+.share-link:hover{color:var(--gold2);}
 </style>
 </head>
 <body>
@@ -170,7 +211,8 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 <div class="hdr">
   <div class="logo">&#9652; SWIMSCORE</div>
   <div class="hmeta" id="hmeta">No meet loaded</div>
-  <button class="bmeets" onclick="openMeetMgr()" style="margin-left:auto">&#128193; Meets</button>
+  <div class="sync-bar" id="syncBar"><span class="sync-dot sync-wait" id="syncDot"></span><span id="syncMsg">Connecting...</span></div>
+  <button class="bmeets" onclick="openMeetMgr()" style="margin-left:.75rem">&#128193; Meets</button>
 </div>
 
 <!-- Meet Manager Modal -->
@@ -198,6 +240,16 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
         <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
           <button class="btn bprimary" onclick="createMeet()">&#43; Create Empty Meet</button>
           <button class="btn" onclick="createMeetWithPreload()">&#9733; Create with 2025 NCAA D3 Women Data</button>
+        </div>
+      </div>
+      <div id="shareSection" style="display:none;margin-top:1rem">
+        <div class="card" style="padding:.875rem 1rem">
+          <div class="ct" style="margin-bottom:.5rem">Share Active Meet (Live View)</div>
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+            <input type="text" id="shareUrl" readonly style="flex:1;font-size:.72rem;font-family:var(--fm);background:var(--bg3);border:1px solid var(--border);color:var(--text-dim);padding:.4rem .6rem;border-radius:5px">
+            <button class="btn bsm" onclick="copyShareUrl()">&#128203; Copy</button>
+          </div>
+          <div style="font-size:.7rem;color:var(--text-dim);margin-top:.4rem">Anyone with this link can view live scores (read-only).</div>
         </div>
       </div>
     </div>
@@ -410,40 +462,163 @@ const MDL={
   dual: {ind:[9,7,6,5,4,3,2,1], rel:[11,4]}
 };
 
-// ── MULTI-MEET STORAGE ────────────────────────────────────────────────────
-const META_KEY='swimscore_meets_meta'; // stores [{id,name,date,model,created}]
+// ── MULTI-MEET STORAGE (Firestore + localStorage fallback) ────────────────
+const META_KEY='swimscore_meets_meta';
+const LS_PREFIX='swimscore_meet_';
 let ACTIVE_ID=null;
+let _unsubMeta=null;   // Firestore listener for meets list
+let _unsubMeet=null;   // Firestore listener for active meet
+let _syncEnabled=false;
+let _isViewOnly=false; // true when loaded via ?meet= share link
+
 let S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};
 
-function meetKey(id){return'swimscore_meet_'+id;}
-function getMeta(){try{var d=localStorage.getItem(META_KEY);return d?JSON.parse(d):[];}catch(e){return[];}}
-function saveMeta(m){try{localStorage.setItem(META_KEY,JSON.stringify(m));}catch(e){}}
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 
-function save(){
-  if(!ACTIVE_ID)return;
-  try{localStorage.setItem(meetKey(ACTIVE_ID),JSON.stringify(S));}catch(e){}
-  // Update meta name/date/model in case they changed
-  var meta=getMeta();
-  var m=meta.find(function(x){return x.id===ACTIVE_ID;});
-  if(m){m.name=S.meetName||'Unnamed Meet';m.date=S.meetDate;m.model=S.scoringModel;saveMeta(meta);}
+// ── Sync status UI ────────────────────────────────────────────────────────
+function setSyncStatus(state,msg){
+  var dot=document.getElementById('syncDot');
+  var txt=document.getElementById('syncMsg');
+  if(!dot)return;
+  dot.className='sync-dot '+(state==='ok'?'sync-ok':state==='err'?'sync-err':'sync-wait');
+  if(txt)txt.textContent=msg||'';
 }
 
+// ── localStorage helpers (offline fallback) ───────────────────────────────
+function lsMeta(){try{var d=localStorage.getItem(META_KEY);return d?JSON.parse(d):[];}catch(e){return[];}}
+function saveLsMeta(m){try{localStorage.setItem(META_KEY,JSON.stringify(m));}catch(e){}}
+function lsSaveMeet(id,data){try{localStorage.setItem(LS_PREFIX+id,JSON.stringify(data));}catch(e){}}
+function lsLoadMeet(id){try{var d=localStorage.getItem(LS_PREFIX+id);return d?JSON.parse(d):null;}catch(e){return null;}}
+function lsDeleteMeet(id){try{localStorage.removeItem(LS_PREFIX+id);}catch(e){}}
+
+// ── Firestore helpers ─────────────────────────────────────────────────────
+function fsMetaDoc(){return window._fsDoc(window._db,'swimscore','meta');}
+function fsMeetDoc(id){return window._fsDoc(window._db,'meets',id);}
+
+// Chunk large data to avoid Firestore 1MB doc limit
+// We store psych data in a separate doc to keep live results snappy
+function fsMeetLiveDoc(id){return window._fsDoc(window._db,'meets_live',id);}
+
+async function fsSaveMeet(id, data){
+  if(!window._fbReady)return;
+  try{
+    // Split: psych data → meets/{id}, live results → meets_live/{id}
+    var psych={meetName:data.meetName,meetDate:data.meetDate,homeTeam:data.homeTeam,
+      scoringModel:data.scoringModel,events:data.events,teams:data.teams,
+      activeTeams:data.activeTeams,session:data.session,projSession:data.projSession,
+      liveSession:data.liveSession,sortCol:data.sortCol,sortDir:data.sortDir,
+      depthTeams:data.depthTeams||[]};
+    var live={liveResults:data.liveResults||{}};
+    await window._fsSetDoc(fsMeetDoc(id), psych);
+    await window._fsSetDoc(fsMeetLiveDoc(id), live);
+  }catch(e){console.warn('Firestore save failed',e);}
+}
+
+async function fsDeleteMeet(id){
+  if(!window._fbReady)return;
+  try{
+    await window._fsDeleteDoc(fsMeetDoc(id));
+    await window._fsDeleteDoc(fsMeetLiveDoc(id));
+  }catch(e){console.warn('Firestore delete failed',e);}
+}
+
+async function fsUpdateMeta(meta){
+  if(!window._fbReady)return;
+  try{await window._fsSetDoc(fsMetaDoc(),{meets:meta});}catch(e){console.warn('Firestore meta save failed',e);}
+}
+
+// ── Save (local + cloud) ──────────────────────────────────────────────────
+function save(){
+  if(!ACTIVE_ID||_isViewOnly)return;
+  var data=JSON.parse(JSON.stringify(S));
+  lsSaveMeet(ACTIVE_ID, data);
+  // Update local meta
+  var meta=lsMeta();
+  var m=meta.find(function(x){return x.id===ACTIVE_ID;});
+  if(m){m.name=S.meetName||'Unnamed Meet';m.date=S.meetDate;m.model=S.scoringModel;}
+  saveLsMeta(meta);
+  // Cloud save (async, fire and forget)
+  if(window._fbReady){
+    fsSaveMeet(ACTIVE_ID, data);
+    fsUpdateMeta(meta);
+    setSyncStatus('ok','Synced');
+  }
+}
+
+// ── Subscribe to real-time updates for active meet ────────────────────────
+function subscribeMeet(id){
+  if(_unsubMeet){_unsubMeet();_unsubMeet=null;}
+  if(!window._fbReady)return;
+
+  var gotPsych=null, gotLive=null;
+
+  function merge(){
+    if(!gotPsych||!gotLive)return;
+    var merged=Object.assign({},gotPsych,{liveResults:gotLive.liveResults||{}});
+    // Only apply if this is coming from another device (avoid overwriting local edits mid-entry)
+    Object.assign(S,merged);
+    applyLoadedState();
+    setSyncStatus('ok','Live');
+  }
+
+  var unsubPsych=window._fsOnSnapshot(fsMeetDoc(id),function(snap){
+    if(snap.exists()){gotPsych=snap.data();merge();}
+  },function(e){setSyncStatus('err','Sync error');});
+
+  var unsubLive=window._fsOnSnapshot(fsMeetLiveDoc(id),function(snap){
+    if(snap.exists()){gotLive=snap.data();}else{gotLive={liveResults:{}};}
+    merge();
+    // Also update just the live leaderboard without full re-render for performance
+    if(document.getElementById('tab-live').classList.contains('act')){
+      updLB();updClinch();
+    }
+  },function(e){setSyncStatus('err','Sync error');});
+
+  _unsubMeet=function(){unsubPsych();unsubLive();};
+}
+
+// ── Subscribe to meets list ───────────────────────────────────────────────
+function subscribeMeta(){
+  if(_unsubMeta){_unsubMeta();_unsubMeta=null;}
+  if(!window._fbReady)return;
+  _unsubMeta=window._fsOnSnapshot(fsMetaDoc(),function(snap){
+    if(snap.exists()){
+      var data=snap.data();
+      if(data.meets){
+        saveLsMeta(data.meets);
+        // Re-render meet list if modal is open
+        if(document.getElementById('meetModal').classList.contains('open')){
+          renderMeetList();
+        }
+      }
+    }
+  },function(e){console.warn('Meta listener error',e);});
+}
+
+// ── Load a meet into S ────────────────────────────────────────────────────
 function loadMeet(id){
   ACTIVE_ID=id;
-  try{
-    var d=localStorage.getItem(meetKey(id));
-    if(d){var p=JSON.parse(d);S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};Object.assign(S,p);}
-    else{S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};}
-  }catch(e){}
-  // Save active id so it persists across reloads
+  var local=lsLoadMeet(id);
+  if(local){S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};Object.assign(S,local);}
+  else{S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};}
   try{localStorage.setItem('swimscore_active_id',id);}catch(e){}
+  subscribeMeet(id);
 }
 
+function loadMeetAndRefresh(id){
+  loadMeet(id);
+  applyLoadedState();
+}
+
+// ── Meet CRUD ─────────────────────────────────────────────────────────────
+function getMeta(){return lsMeta();}
+
 function deleteMeet(id){
-  try{localStorage.removeItem(meetKey(id));}catch(e){}
-  var meta=getMeta().filter(function(x){return x.id!==id;});
-  saveMeta(meta);
+  lsDeleteMeet(id);
+  fsDeleteMeet(id);
+  var meta=lsMeta().filter(function(x){return x.id!==id;});
+  saveLsMeta(meta);
+  fsUpdateMeta(meta);
   if(ACTIVE_ID===id){
     if(meta.length){loadMeetAndRefresh(meta[meta.length-1].id);}
     else{createFirstMeet();}
@@ -453,9 +628,9 @@ function deleteMeet(id){
 
 function createNewMeet(name,date,model,preload){
   var id=genId();
-  var meta=getMeta();
+  var meta=lsMeta();
   meta.push({id:id,name:name||'Unnamed Meet',date:date||'',model:model||'uaa',created:Date.now()});
-  saveMeta(meta);
+  saveLsMeta(meta);
   loadMeet(id);
   S.meetName=name||'';S.meetDate=date||'';S.scoringModel=model||'uaa';S.homeTeam='Emory';
   if(preload&&PRELOADED_PSYCH&&PRELOADED_PSYCH.events.length){
@@ -465,6 +640,7 @@ function createNewMeet(name,date,model,preload){
     autoDays();
   }
   save();
+  fsUpdateMeta(meta);
   return id;
 }
 
@@ -472,9 +648,44 @@ function createFirstMeet(){
   createNewMeet('2025 NCAA D3 Women','','ncaa',true);
 }
 
-function loadMeetAndRefresh(id){
-  loadMeet(id);
-  applyLoadedState();
+// ── Share link ────────────────────────────────────────────────────────────
+function getShareUrl(id){
+  var base=window.location.href.split('?')[0].split('#')[0];
+  return base+'?meet='+(id||ACTIVE_ID);
+}
+
+function copyShareUrl(){
+  var url=document.getElementById('shareUrl').value;
+  navigator.clipboard.writeText(url).then(function(){
+    var btn=event.target;btn.textContent='✓ Copied!';setTimeout(function(){btn.textContent='📋 Copy';},2000);
+  }).catch(function(){alert('Copy: '+url);});
+}
+
+// Check if loaded as view-only share link
+function checkShareLink(){
+  var params=new URLSearchParams(window.location.search);
+  var meetId=params.get('meet');
+  if(meetId){
+    _isViewOnly=true;
+    setSyncStatus('wait','Loading shared meet...');
+    // Load from Firestore directly
+    document.addEventListener('firebase-ready',function(){
+      subscribeMeet(meetId);
+      ACTIVE_ID=meetId;
+      setSyncStatus('ok','Live view');
+      // Show view-only banner
+      var banner=document.createElement('div');
+      banner.style.cssText='background:rgba(201,168,76,.15);border-bottom:1px solid rgba(201,168,76,.3);padding:.5rem 1.5rem;font-size:.75rem;font-family:var(--fm);color:var(--gold);text-align:center;';
+      banner.textContent='👁 View-only live score feed — '+window.location.href;
+      document.body.insertBefore(banner,document.body.firstChild);
+      // Hide edit controls
+      document.querySelectorAll('.btn, select, input, textarea').forEach(function(el){
+        if(!el.closest('.hdr'))el.style.pointerEvents='none';
+      });
+    },{once:true});
+    return true;
+  }
+  return false;
 }
 
 function applyLoadedState(){
@@ -1275,7 +1486,15 @@ function updClinch(){
 }
 
 // ── MEET MANAGER UI ───────────────────────────────────────────────────────
-function openMeetMgr(){renderMeetList();document.getElementById('meetModal').classList.add('open');}
+function openMeetMgr(){
+  renderMeetList();
+  // Show share section for active meet
+  if(ACTIVE_ID){
+    document.getElementById('shareSection').style.display='block';
+    document.getElementById('shareUrl').value=getShareUrl(ACTIVE_ID);
+  }
+  document.getElementById('meetModal').classList.add('open');
+}
 function closeMeetMgr(){document.getElementById('meetModal').classList.remove('open');}
 
 // Close modal on overlay click
@@ -1368,20 +1587,35 @@ function init(){
     if(this.files[0])handlePDF(this.files[0]);
   });
 
-  var meta=getMeta();
+  // Check for view-only share link
+  if(checkShareLink())return;
 
+  // Normal load from localStorage first (instant)
+  var meta=lsMeta();
   if(!meta.length){
-    // First ever launch — create the preloaded meet
     createFirstMeet();
     applyLoadedState();
     showSt('Loaded: '+S.events.length+' events, '+S.teams.length+' teams (2025 NCAA D3 Women)','ok');
   } else {
-    // Restore last active meet
     var lastId=null;
     try{lastId=localStorage.getItem('swimscore_active_id');}catch(e){}
     var target=lastId&&meta.find(function(x){return x.id===lastId;})?lastId:meta[meta.length-1].id;
     loadMeet(target);
     applyLoadedState();
+  }
+
+  // Start Firebase sync once ready
+  document.addEventListener('firebase-ready',function(){
+    setSyncStatus('ok','Synced');
+    subscribeMeta();
+    if(ACTIVE_ID)subscribeMeet(ACTIVE_ID);
+  },{once:true});
+
+  // If Firebase already loaded (fast connection)
+  if(window._fbReady){
+    setSyncStatus('ok','Synced');
+    subscribeMeta();
+    if(ACTIVE_ID)subscribeMeet(ACTIVE_ID);
   }
 }
 
