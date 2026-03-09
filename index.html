@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -204,6 +205,13 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .sync-bar{display:flex;align-items:center;font-size:.7rem;font-family:var(--fm);color:var(--text-dim);gap:.25rem;margin-left:.75rem;}
 .share-link{font-size:.72rem;font-family:var(--fm);color:var(--gold);cursor:pointer;text-decoration:underline;margin-left:.5rem;}
 .share-link:hover{color:var(--gold2);}
+
+/* Prelim/Final toggle */
+.pf-toggle{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.2rem;gap:.2rem;margin-bottom:.875rem;width:fit-content;}
+.pf-pill{padding:.3rem .875rem;border-radius:4px;font-size:.72rem;font-family:var(--fm);cursor:pointer;color:var(--text-dim);border:none;background:none;letter-spacing:.06em;transition:all .15s;}
+.pf-pill.act{background:var(--bg3);color:var(--gold);border:1px solid var(--border);}
+.pf-pill.act.pfinal{background:rgba(76,175,125,.15);color:var(--green);border-color:rgba(76,175,125,.3);}
+.timed-final-badge{font-size:.62rem;font-family:var(--fm);padding:.15rem .5rem;border-radius:3px;background:rgba(76,175,125,.15);color:var(--green);border:1px solid rgba(76,175,125,.3);margin-left:.5rem;}
 </style>
 </head>
 <body>
@@ -212,7 +220,8 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
   <div class="logo">&#9652; SWIMSCORE</div>
   <div class="hmeta" id="hmeta">No meet loaded</div>
   <div class="sync-bar" id="syncBar"><span class="sync-dot sync-wait" id="syncDot"></span><span id="syncMsg">Connecting...</span></div>
-  <button class="bmeets" onclick="openMeetMgr()" style="margin-left:.75rem">&#128193; Meets</button>
+  <button class="bmeets" onclick="downloadHTML()" style="margin-left:.75rem" title="Download this file">&#8595; Save</button>
+  <button class="bmeets" onclick="openMeetMgr()" style="margin-left:.5rem">&#128193; Meets</button>
 </div>
 
 <!-- Meet Manager Modal -->
@@ -482,7 +491,9 @@ let _unsubMeet=null;   // Firestore listener for active meet
 let _syncEnabled=false;
 let _isViewOnly=false; // true when loaded via ?meet= share link
 
-let S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};
+let S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},liveMode:{},sortCol:'total',sortDir:'desc'};
+// liveResults[gi] = {prelim:[{team,scratch,tie},...], final:[...]}
+// liveMode[gi] = 'prelim' or 'final'
 
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 
@@ -614,8 +625,8 @@ function subscribeMeta(){
 function loadMeet(id){
   ACTIVE_ID=id;
   var local=lsLoadMeet(id);
-  if(local){S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};Object.assign(S,local);}
-  else{S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};}
+  if(local){S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},liveMode:{},sortCol:'total',sortDir:'desc'};Object.assign(S,local);}
+  else{S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},liveMode:{},sortCol:'total',sortDir:'desc'};}
   try{localStorage.setItem('swimscore_active_id',id);}catch(e){}
   subscribeMeet(id);
 }
@@ -1219,91 +1230,206 @@ function renderLive(){
   renderLiveEvs();updLB();updClinch();
 }
 
+// ── Prelim/Final helpers ──────────────────────────────────────────────────
+function isTimedFinal(ev){return /1650|1500/i.test(ev.name);}
+function evMode(gi){return S.liveMode[gi]||'prelim';}
+function setEvMode(gi,mode){
+  if(!S.liveMode)S.liveMode={};
+  S.liveMode[gi]=mode;
+  // Re-render just this event's body — do NOT call renderLiveEvs (resets tab)
+  renderEventBody(gi);
+}
+
+function renderEventBody(gi){
+  var eb=document.getElementById('eb'+gi);
+  if(!eb)return;
+  var ev=S.events[gi];
+  if(!ev)return;
+  var isTF=isTimedFinal(ev);
+  var mode=isTF?'final':evMode(gi);
+  var d=getLR(gi);
+  var res=d[mode]||[];
+  var prelimRes=d.prelim||[];
+  var pts=mpts(ev.isRelay);
+  var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+  var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
+  var hasFinal=d.final.some(function(x){return x&&x.team;});
+  var h='';
+
+  // Toggle pill
+  if(!isTF){
+    h+='<div style="display:flex;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.2rem;gap:.2rem;margin-bottom:.875rem;width:fit-content">';
+    var pStyle=mode==='prelim'?'background:var(--bg3);color:var(--gold);border:1px solid var(--border)':'background:none;color:var(--text-dim)';
+    var fStyle=mode==='final'?'background:rgba(76,175,125,.15);color:var(--green);border:1px solid rgba(76,175,125,.3)':'background:none;color:var(--text-dim)';
+    h+='<button style="padding:.3rem .875rem;border-radius:4px;font-size:.72rem;font-family:var(--fm);cursor:pointer;letter-spacing:.06em;border:none;'+pStyle+'" onclick="setEvMode('+gi+',\'prelim\')">PRELIM</button>';
+    h+='<button style="padding:.3rem .875rem;border-radius:4px;font-size:.72rem;font-family:var(--fm);cursor:pointer;letter-spacing:.06em;border:none;'+fStyle+'" onclick="setEvMode('+gi+',\'final\')">FINAL</button>';
+    h+='</div>';
+  }
+
+  // Context line
+  if(isTF){
+    h+='<div style="font-size:.7rem;color:var(--green);font-family:var(--fm);margin-bottom:.75rem">&#9654; Timed final &mdash; scores points</div>';
+  } else if(mode==='prelim'){
+    h+='<div style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm);margin-bottom:.75rem">Prelim results &mdash; not scored. Switch to FINAL after the race.</div>';
+  } else {
+    h+='<div style="font-size:.7rem;color:var(--green);font-family:var(--fm);margin-bottom:.75rem">&#9654; Final results &mdash; these score points</div>';
+  }
+
+  // Column headers
+  var col3hdr=(mode==='final'&&hasPrelim)?'Prelim &#8594; Final':'Psych seed';
+  h+='<div class="pg">';
+  h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span>TIE</span><span>SCR</span></div>';
+
+  for(var rk=0;rk<pts.length;rk++){
+    var r=res[rk]||{};
+    var ps=entries[rk]||{};
+    var tm=r.team!==undefined?r.team:'';
+    var sc2=r.scratch?'checked':'';
+    var tie2=r.tie?'checked':'';
+    var opts='<option value="">—</option>';
+    S.activeTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
+    var refCell='';
+    if(mode==='final'&&hasPrelim){
+      var prelimPlace=-1;
+      if(tm){for(var pi=0;pi<prelimRes.length;pi++){if(prelimRes[pi]&&prelimRes[pi].team===tm){prelimPlace=pi+1;break;}}}
+      if(prelimPlace>0){
+        var delta=prelimPlace-(rk+1);
+        var dStr=delta>0?'<span style="color:var(--green)">&#9650;'+delta+'</span>':delta<0?'<span style="color:var(--red)">&#9660;'+Math.abs(delta)+'</span>':'<span style="color:var(--text-dim)">=</span>';
+        refCell='<span style="font-size:.7rem;white-space:nowrap">'+prelimPlace+'&#8594;'+(rk+1)+' '+dStr+'</span>';
+      } else {
+        refCell='<span style="color:var(--text-dim);font-size:.7rem">—</span>';
+      }
+    } else {
+      refCell='<span style="color:var(--text-dim);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ps.team||'—')+'</span>';
+    }
+    h+='<div class="pr" style="grid-template-columns:32px 1fr 1fr auto auto">';
+    h+='<span class="pn">'+(rk+1)+'</span>';
+    h+='<select onchange="setLR('+gi+','+rk+','team',this.value)">'+opts+'</select>';
+    h+=refCell;
+    h+='<label class="sc" title="Ties with place above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+','tie',this.checked)"></label>';
+    h+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+','scratch',this.checked)"></label>';
+    h+='</div>';
+  }
+  h+='</div>';
+
+  var chalkLabel=(mode==='final'&&hasPrelim)?'&#9654; Chalk from Prelim':'&#9654; Goes Chalk';
+  h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">';
+  h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">'+chalkLabel+'</button>';
+  h+='<button class="btn bsm" onclick="clrEv('+gi+')">Clear</button>';
+  h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">TIE = ties with row above</span>';
+  h+='</div>';
+  eb.innerHTML=h;
+}
+
+function getLR(gi){
+  var d=S.liveResults[gi];
+  if(!d)return{prelim:[],final:[]};
+  if(Array.isArray(d))return{prelim:d,final:[]};
+  return{prelim:d.prelim||[],final:d.final||[]};
+}
+
+function statusLabel(gi){
+  var d=getLR(gi);
+  var ev=S.events[gi];
+  var isTF=ev&&isTimedFinal(ev);
+  var hasPrelim=d.prelim.some(function(x){return x&&x.team;});
+  var hasFinal=d.final.some(function(x){return x&&x.team;});
+  if(isTF)return hasFinal?'\u2713 done':'pending';
+  if(hasFinal&&hasPrelim)return'\u2713 prelim \u00b7 \u2713 final';
+  if(hasPrelim)return'prelim \u2713 \u00b7 final pending';
+  return'pending';
+}
+
 function renderLiveEvs(){
   var evs=actEvs(S.liveSession),h='';
   evs.forEach(function(ev){
     var gi=S.events.indexOf(ev);
-    var res=S.liveResults[gi]||[];
-    var any=false;for(var ri=0;ri<res.length;ri++){if(res[ri]&&res[ri].team){any=true;break;}}
+    var isTF=isTimedFinal(ev);
+    var mode=isTF?'final':evMode(gi);
+    var d=getLR(gi);
+    var res=d[mode]||[];
+    var prelimRes=d.prelim||[];
     var pts=mpts(ev.isRelay);
     var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
-    var prows='';
-    prows+='<div class="pr" style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto"><span>PL</span><span>Result</span><span>Psych</span><span>TIE</span><span>SCR</span></div>';
-    for(var rk=0;rk<pts.length;rk++){
-      var r=res[rk]||{},ps=entries[rk]||{};
-      var tm=r.team!==undefined?r.team:(ps.team||'');
-      var sc2=r.scratch?'checked':'';
-      var tie2=r.tie?'checked':'';
-      var opts='<option value="">—</option>';
-      S.activeTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
-      prows+='<div class="pr" style="grid-template-columns:32px 1fr 1fr auto auto">';
-      prows+='<span class="pn">'+(rk+1)+'</span>';
-      prows+='<select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>';
-      prows+='<span style="color:var(--text-dim);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ps.team||'—')+'</span>';
-      prows+='<label class="sc" title="Ties with place above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
-      prows+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
-      prows+='</div>';
-    }
-    var stcls=any?'partial':'pending';
+    var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
+    var hasFinal=d.final.some(function(x){return x&&x.team;});
+    var hasAny=hasPrelim||hasFinal;
+    var stcls=hasFinal?'done':hasAny?'partial':'pending';
     var tagcls=ev.isRelay?'tgr':'tgi';
+    var label=statusLabel(gi);
+
     h+='<div class="ea" id="ea'+gi+'">';
     h+='<div class="ehr '+stcls+'" id="eh'+gi+'" onclick="togAcc('+gi+')">';
     h+='<span class="en">E'+ev.num+'</span>';
-    h+='<span class="enm">'+ev.gender+' '+ev.name+'</span>';
+    h+='<span class="enm">'+ev.gender+' '+ev.name+(isTF?'<span class="timed-final-badge" style="font-size:.6rem;font-family:var(--fm);padding:.15rem .4rem;border-radius:3px;background:rgba(76,175,125,.15);color:var(--green);border:1px solid rgba(76,175,125,.3);margin-left:.5rem">TIMED FINAL</span>':'')+'</span>';
     h+='<span class="tag '+tagcls+'">'+(ev.isRelay?'RELAY':'IND')+'</span>';
-    h+='<span class="epb" id="epb'+gi+'">'+(any?'partial':'pending')+'</span>';
+    h+='<span class="epb" id="epb'+gi+'">'+label+'</span>';
     h+='<span style="color:var(--text-dim);font-size:.8rem">&#9662;</span>';
     h+='</div>';
-    h+='<div class="eb" id="eb'+gi+'">';
-    h+='<div class="pg">'+prows+'</div>';
-    h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center">';
-    h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">&#9654; Goes Chalk</button>';
-    h+='<button class="btn bsm" onclick="clrEv('+gi+')">Clear</button>';
-    h+='<span style="font-size:.68rem;color:var(--text-dim);font-family:var(--fm)">TIE = ties with place above &middot; SCR = scratch</span>';
-    h+='</div></div></div>';
+    h+='<div class="eb" id="eb'+gi+'"></div></div>';
   });
   document.getElementById('lev').innerHTML=h;
+  // Populate each event body without triggering tab resets
+  evs.forEach(function(ev){renderEventBody(S.events.indexOf(ev));});
 }
 
 function togAcc(gi){var b=document.getElementById('eb'+gi);if(b)b.classList.toggle('open');}
 
 function setLR(gi,rk,f,v){
-  if(!S.liveResults[gi])S.liveResults[gi]=[];
-  if(!S.liveResults[gi][rk])S.liveResults[gi][rk]={};
-  S.liveResults[gi][rk][f]=v;
+  var mode=evMode(gi);
+  var d=S.liveResults[gi];
+  if(!d||Array.isArray(d))S.liveResults[gi]={prelim:Array.isArray(d)?d:[],final:[]};
+  if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
+  if(!S.liveResults[gi][mode][rk])S.liveResults[gi][mode][rk]={};
+  S.liveResults[gi][mode][rk][f]=v;
   save();updLB();updClinch();
   var eh=document.getElementById('eh'+gi);
   if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('partial');}
 }
 
 function mkDone(gi){
-  var ev=S.events[gi];
-  if(!ev)return;
+  var ev=S.events[gi];if(!ev)return;
+  var mode=evMode(gi);
+  var d=S.liveResults[gi];
+  if(!d||Array.isArray(d))S.liveResults[gi]={prelim:Array.isArray(d)?d:[],final:[]};
   var pts=mpts(ev.isRelay);
-  var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
-  if(!S.liveResults[gi])S.liveResults[gi]=[];
+  // Source: in final mode use prelim order if available, else psych; in prelim mode use psych
+  var src=[];
+  if(mode==='final'){
+    var pr=S.liveResults[gi].prelim||[];
+    var hasPrelim=pr.some(function(x){return x&&x.team;});
+    if(hasPrelim){src=pr;}
+    else{src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,scratch:false,tie:false};});}
+  } else {
+    src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,scratch:false,tie:false};});
+  }
+  if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
   for(var rk=0;rk<pts.length;rk++){
-    if(!S.liveResults[gi][rk]||!S.liveResults[gi][rk].team){
-      var en=entries[rk];
-      S.liveResults[gi][rk]=en?{team:en.team,scratch:false,tie:false}:{team:'',scratch:false,tie:false};
+    if(!S.liveResults[gi][mode][rk]||!S.liveResults[gi][mode][rk].team){
+      S.liveResults[gi][mode][rk]=src[rk]?{team:src[rk].team,scratch:false,tie:false}:{team:'',scratch:false,tie:false};
     }
   }
   save();
-  // Update just this event's header — don't re-render entire list
   var eh=document.getElementById('eh'+gi);
-  if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('done');}
+  if(eh){eh.classList.remove('done','partial','pending');eh.classList.add(mode==='final'?'done':'partial');}
   var epb=document.getElementById('epb'+gi);
-  if(epb)epb.textContent='\u2713 done';
-  // Update dropdowns in place without collapsing accordion
-  var pts2=mpts(ev.isRelay);
-  for(var rk2=0;rk2<pts2.length;rk2++){
+  if(epb)epb.textContent=statusLabel(gi);
+  // Update dropdowns in place
+  for(var rk2=0;rk2<pts.length;rk2++){
     var sel=document.querySelector('#eb'+gi+' .pg .pr:nth-child('+(rk2+2)+') select');
-    if(sel&&S.liveResults[gi][rk2]){sel.value=S.liveResults[gi][rk2].team||'';}
+    if(sel&&S.liveResults[gi][mode][rk2]){sel.value=S.liveResults[gi][mode][rk2].team||'';}
   }
   updLB();updClinch();
 }
 
-function clrEv(gi){delete S.liveResults[gi];save();renderLiveEvs();updLB();updClinch();}
+function clrEv(gi){
+  var mode=evMode(gi);
+  var d=S.liveResults[gi];
+  if(d&&!Array.isArray(d)){d[mode]=[];}
+  else{delete S.liveResults[gi];}
+  save();renderLiveEvs();updLB();updClinch();
+}
+
 
 function liveScores(){
   var sc={};
@@ -1312,8 +1438,10 @@ function liveScores(){
     var gi=parseInt(gis),ev=S.events[gi];
     if(!ev||!ev.active)return;
     var pts=mpts(ev.isRelay);
-    var res=S.liveResults[gi];
-    // Build list of non-scratched finishers with their place index
+    var d=S.liveResults[gi];
+    // Always score from final results only (or flat array for backward compat)
+    var res=Array.isArray(d)?d:(d.final||[]);
+    // Build list of non-scratched finishers
     var finishers=[];
     res.forEach(function(x,rk){
       if(!x||x.scratch||!x.team)return;
@@ -1370,7 +1498,9 @@ function updFinalsBreakdown(){
   var anyEntered=false;
   evs.forEach(function(ev){
     var gi=S.events.indexOf(ev);
-    var res=S.liveResults[gi];
+    var d=getLR(gi);
+    var res=d.final.some(function(x){return x&&x.team;})?d.final:
+            (isTimedFinal(S.events[gi])?d.prelim:[]);
     if(!res||!res.some(function(x){return x&&x.team;}))return;
     anyEntered=true;
     var teamCounts={};
@@ -1439,9 +1569,11 @@ function updLiveBreakdown(){
   var evScores=[];
   evs.forEach(function(ev){
     var gi=S.events.indexOf(ev);
-    var res=S.liveResults[gi];
+    var d=getLR(gi);
+    var res=d.final.some(function(x){return x&&x.team;})?d.final:
+            (isTimedFinal(ev)?d.prelim:[]);
     var teamPts={};teams.forEach(function(t){teamPts[t]=0;});
-    if(res){
+    if(res&&res.length){
       var pts=mpts(ev.isRelay);
       var rk=0;
       res.forEach(function(x){
@@ -1518,9 +1650,13 @@ function updClinch(){
   var allTeams=Object.keys(sc).map(function(t){return{team:t,pts:sc[t]||0};}).sort(function(a,b){return b.pts-a.pts;});
   var homeRank=allTeams.findIndex(function(x){return x.team===home;})+1;
 
-  // Points remaining
+  // Points remaining — only count events with no final results yet
   var done={};
-  Object.keys(S.liveResults).forEach(function(gi){done[parseInt(gi)]=1;});
+  Object.keys(S.liveResults).forEach(function(gi){
+    var d=S.liveResults[gi];
+    var finalRes=Array.isArray(d)?d:(d&&d.final||[]);
+    if(finalRes.some(function(x){return x&&x.team;}))done[parseInt(gi)]=1;
+  });
   var rem=actEvs('full').filter(function(ev){return!done[S.events.indexOf(ev)];});
   var avail=0;rem.forEach(function(ev){var p=mpts(ev.isRelay);avail+=p[0]||0;});
   document.getElementById('avail').textContent=avail.toFixed(0)+' pts';
@@ -1619,6 +1755,7 @@ function dupMeet(id){
     var copy=JSON.parse(JSON.stringify(src));
     copy.meetName=newName;
     copy.liveResults={};
+    copy.liveMode={};
     localStorage.setItem(meetKey(newId),JSON.stringify(copy));
     renderMeetList();
   }catch(e){alert('Duplicate failed.');}
@@ -1653,6 +1790,16 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 function showSt(msg,type){var el=document.getElementById('ps');el.textContent=msg;el.className='st '+type;}
 
 // ── INIT ──────────────────────────────────────────────────────────────────
+
+function downloadHTML(){
+  var src=document.documentElement.outerHTML;
+  var blob=new Blob([src],{type:'text/html'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='SwimScore.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 function init(){
   document.getElementById('pfu').addEventListener('change',function(){
