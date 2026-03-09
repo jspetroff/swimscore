@@ -140,6 +140,29 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 /* Empty state */
 .es{display:flex;flex-direction:column;align-items:center;gap:.75rem;padding:3rem;color:var(--text-dim);text-align:center;}
 .ico{font-size:2.5rem;}
+
+/* Meet Manager Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:100%;max-width:600px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);}
+.modal-title{font-family:var(--fm);font-size:.85rem;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;}
+.modal-close{background:none;border:none;color:var(--text-dim);font-size:1.2rem;cursor:pointer;padding:.25rem;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:1.25rem 1.5rem;overflow-y:auto;flex:1;}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;gap:.75rem;justify-content:flex-end;}
+.meet-list{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.25rem;}
+.meet-item{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:var(--bg3);border:1px solid var(--border);border-radius:8px;transition:border-color .2s;}
+.meet-item.active-meet{border-color:var(--gold);background:rgba(201,168,76,.06);}
+.meet-item-info{flex:1;min-width:0;}
+.meet-item-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.meet-item-meta{font-size:.72rem;color:var(--text-dim);font-family:var(--fm);margin-top:.2rem;}
+.meet-item-actions{display:flex;gap:.375rem;flex-shrink:0;}
+.new-meet-form{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1rem;}
+.new-meet-form .ct{margin-bottom:.875rem;}
+.bmeets{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.4rem .875rem;border-radius:6px;cursor:pointer;font-size:.75rem;font-family:var(--fm);letter-spacing:.05em;transition:all .2s;white-space:nowrap;}
+.bmeets:hover{border-color:var(--gold);color:var(--gold);}
+.active-badge{font-size:.6rem;font-family:var(--fm);background:var(--gold);color:#0f1117;padding:.15rem .4rem;border-radius:3px;font-weight:700;letter-spacing:.06em;}
 </style>
 </head>
 <body>
@@ -147,6 +170,38 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 <div class="hdr">
   <div class="logo">&#9652; SWIMSCORE</div>
   <div class="hmeta" id="hmeta">No meet loaded</div>
+  <button class="bmeets" onclick="openMeetMgr()" style="margin-left:auto">&#128193; Meets</button>
+</div>
+
+<!-- Meet Manager Modal -->
+<div class="modal-overlay" id="meetModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Meet Manager</div>
+      <button class="modal-close" onclick="closeMeetMgr()">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="meet-list" id="meetList"></div>
+      <div class="new-meet-form">
+        <div class="ct">New Meet</div>
+        <div class="frow">
+          <div class="fg1"><label>Meet Name</label><input type="text" id="nmName" placeholder="e.g. 2026 NCAA D3 Women"></div>
+          <div class="fg1" style="max-width:160px"><label>Date</label><input type="date" id="nmDate"></div>
+          <div class="fg1" style="max-width:160px"><label>Scoring Model</label>
+            <select id="nmModel">
+              <option value="uaa">UAA Championship</option>
+              <option value="ncaa">NCAA Championship</option>
+              <option value="dual">Dual Meet</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
+          <button class="btn bprimary" onclick="createMeet()">&#43; Create Empty Meet</button>
+          <button class="btn" onclick="createMeetWithPreload()">&#9733; Create with 2025 NCAA D3 Women Data</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="wrap">
@@ -355,11 +410,90 @@ const MDL={
   dual: {ind:[9,7,6,5,4,3,2,1], rel:[11,4]}
 };
 
-const SK='swimscore_v3';
+// ── MULTI-MEET STORAGE ────────────────────────────────────────────────────
+const META_KEY='swimscore_meets_meta'; // stores [{id,name,date,model,created}]
+let ACTIVE_ID=null;
 let S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};
 
-function save(){try{localStorage.setItem(SK,JSON.stringify(S));}catch(e){}}
-function load(){try{var d=localStorage.getItem(SK);if(d){var p=JSON.parse(d);Object.assign(S,p);}}catch(e){}}
+function meetKey(id){return'swimscore_meet_'+id;}
+function getMeta(){try{var d=localStorage.getItem(META_KEY);return d?JSON.parse(d):[];}catch(e){return[];}}
+function saveMeta(m){try{localStorage.setItem(META_KEY,JSON.stringify(m));}catch(e){}}
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+
+function save(){
+  if(!ACTIVE_ID)return;
+  try{localStorage.setItem(meetKey(ACTIVE_ID),JSON.stringify(S));}catch(e){}
+  // Update meta name/date/model in case they changed
+  var meta=getMeta();
+  var m=meta.find(function(x){return x.id===ACTIVE_ID;});
+  if(m){m.name=S.meetName||'Unnamed Meet';m.date=S.meetDate;m.model=S.scoringModel;saveMeta(meta);}
+}
+
+function loadMeet(id){
+  ACTIVE_ID=id;
+  try{
+    var d=localStorage.getItem(meetKey(id));
+    if(d){var p=JSON.parse(d);S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};Object.assign(S,p);}
+    else{S={meetName:'',meetDate:'',homeTeam:'Emory',scoringModel:'uaa',events:[],teams:[],activeTeams:[],session:'full',projSession:'full',liveSession:'full',liveResults:{},sortCol:'total',sortDir:'desc'};}
+  }catch(e){}
+  // Save active id so it persists across reloads
+  try{localStorage.setItem('swimscore_active_id',id);}catch(e){}
+}
+
+function deleteMeet(id){
+  try{localStorage.removeItem(meetKey(id));}catch(e){}
+  var meta=getMeta().filter(function(x){return x.id!==id;});
+  saveMeta(meta);
+  if(ACTIVE_ID===id){
+    if(meta.length){loadMeetAndRefresh(meta[meta.length-1].id);}
+    else{createFirstMeet();}
+  }
+  renderMeetList();
+}
+
+function createNewMeet(name,date,model,preload){
+  var id=genId();
+  var meta=getMeta();
+  meta.push({id:id,name:name||'Unnamed Meet',date:date||'',model:model||'uaa',created:Date.now()});
+  saveMeta(meta);
+  loadMeet(id);
+  S.meetName=name||'';S.meetDate=date||'';S.scoringModel=model||'uaa';S.homeTeam='Emory';
+  if(preload&&PRELOADED_PSYCH&&PRELOADED_PSYCH.events.length){
+    S.events=JSON.parse(JSON.stringify(PRELOADED_PSYCH.events));
+    S.teams=PRELOADED_PSYCH.teams.slice();
+    S.activeTeams=PRELOADED_PSYCH.teams.slice();
+    autoDays();
+  }
+  save();
+  return id;
+}
+
+function createFirstMeet(){
+  createNewMeet('2025 NCAA D3 Women','','ncaa',true);
+}
+
+function loadMeetAndRefresh(id){
+  loadMeet(id);
+  applyLoadedState();
+}
+
+function applyLoadedState(){
+  document.getElementById('mn').value=S.meetName||'';
+  document.getElementById('md').value=S.meetDate||'';
+  document.getElementById('ht').value=S.homeTeam||'Emory';
+  document.getElementById('sm').value=S.scoringModel||'uaa';
+  document.getElementById('hmeta').textContent=(S.meetName||'Unnamed Meet')+(S.meetDate?' \u00b7 '+S.meetDate:'');
+  // Restore session pills
+  document.querySelectorAll('#ssp .pill').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('#ssp .pill').forEach(function(p){if(p.getAttribute('onclick')&&p.getAttribute('onclick').indexOf("'"+S.session+"'")>=0)p.classList.add('active');});
+  document.querySelectorAll('#psp .pill').forEach(function(p){p.classList.remove('active');});
+  document.querySelectorAll('#psp .pill').forEach(function(p){if(p.getAttribute('onclick')&&p.getAttribute('onclick').indexOf("'"+S.projSession+"'")>=0)p.classList.add('active');});
+  if(S.events&&S.events.length){document.getElementById('pps').style.display='block';renderSetup();}
+  else{document.getElementById('pps').style.display='none';renderSetup();}
+  // Reset tabs to setup
+  showTab('setup',document.querySelector('.tb'));
+  showSt('','ok');document.getElementById('ps').className='st';
+}
 
 // ── TABS ──────────────────────────────────────────────────────────────────
 function showTab(id,btn){
@@ -553,7 +687,7 @@ function setAllTm(on){S.activeTeams=on?S.teams.slice():[];renderTmCl();save();}
 function togTm(t,on){if(on){if(S.activeTeams.indexOf(t)<0)S.activeTeams.push(t);}else{S.activeTeams=S.activeTeams.filter(function(x){return x!==t;});}save();}
 function togEv(i,on){S.events[i].active=on;save();}
 function setDay(i,d){S.events[i].day=parseInt(d);save();}
-function clearAll(){if(confirm('Clear all data?')){S.events=[];S.teams=[];S.activeTeams=[];S.liveResults={};document.getElementById('pps').style.display='none';renderSetup();save();showSt('Cleared.','ok');}}
+function clearAll(){if(confirm('Clear all data for this meet?')){S.events=[];S.teams=[];S.activeTeams=[];S.liveResults={};document.getElementById('pps').style.display='none';renderSetup();save();showSt('Cleared.','ok');}}
 
 // ── SCORING UTILS ─────────────────────────────────────────────────────────
 function mpts(isRelay){var m=MDL[S.scoringModel]||MDL.ncaa;return isRelay?m.rel:m.ind;}
@@ -1140,43 +1274,114 @@ function updClinch(){
   el.innerHTML=msg;
 }
 
-// ── UTILS ─────────────────────────────────────────────────────────────────
+// ── MEET MANAGER UI ───────────────────────────────────────────────────────
+function openMeetMgr(){renderMeetList();document.getElementById('meetModal').classList.add('open');}
+function closeMeetMgr(){document.getElementById('meetModal').classList.remove('open');}
+
+// Close modal on overlay click
+document.addEventListener('click',function(e){
+  var modal=document.getElementById('meetModal');
+  if(e.target===modal)closeMeetMgr();
+});
+
+function renderMeetList(){
+  var meta=getMeta();
+  var h='';
+  if(!meta.length){h='<div style="color:var(--text-dim);font-size:.82rem;padding:.5rem 0">No meets saved yet.</div>';}
+  meta.slice().reverse().forEach(function(m){
+    var isActive=m.id===ACTIVE_ID;
+    var modelLabel=m.model==='uaa'?'UAA':m.model==='ncaa'?'NCAA':'Dual';
+    h+='<div class="meet-item'+(isActive?' active-meet':'')+'">';
+    h+='<div class="meet-item-info">';
+    h+='<div class="meet-item-name">'+esc(m.name||'Unnamed Meet')+(isActive?' <span class="active-badge">ACTIVE</span>':'')+'</div>';
+    h+='<div class="meet-item-meta">'+esc(m.date||'No date')+' &middot; '+modelLabel+'</div>';
+    h+='</div>';
+    h+='<div class="meet-item-actions">';
+    if(!isActive)h+='<button class="btn bsm bprimary" onclick="selectMeet(\''+m.id+'\')">Load</button>';
+    h+='<button class="btn bsm" onclick="dupMeet(\''+m.id+'\')" title="Duplicate">&#10064;</button>';
+    h+='<button class="btn bsm" style="color:var(--red);border-color:var(--red)" onclick="confirmDelete(\''+m.id+'\',\''+esc(m.name||'Unnamed Meet')+'\')" title="Delete">&#128465;</button>';
+    h+='</div></div>';
+  });
+  document.getElementById('meetList').innerHTML=h;
+}
+
+function selectMeet(id){
+  loadMeetAndRefresh(id);
+  renderMeetList();
+  closeMeetMgr();
+}
+
+function confirmDelete(id,name){
+  if(confirm('Delete "'+name+'"? This cannot be undone.')){deleteMeet(id);}
+}
+
+function dupMeet(id){
+  try{
+    var d=localStorage.getItem(meetKey(id));
+    var src=d?JSON.parse(d):{};
+    var meta=getMeta();
+    var orig=meta.find(function(x){return x.id===id;})||{};
+    var newId=genId();
+    var newName=(orig.name||'Unnamed Meet')+' (copy)';
+    meta.push({id:newId,name:newName,date:orig.date||'',model:orig.model||'uaa',created:Date.now()});
+    saveMeta(meta);
+    var copy=JSON.parse(JSON.stringify(src));
+    copy.meetName=newName;
+    copy.liveResults={};
+    localStorage.setItem(meetKey(newId),JSON.stringify(copy));
+    renderMeetList();
+  }catch(e){alert('Duplicate failed.');}
+}
+
+function createMeet(){
+  var name=document.getElementById('nmName').value.trim();
+  var date=document.getElementById('nmDate').value;
+  var model=document.getElementById('nmModel').value;
+  if(!name){document.getElementById('nmName').focus();return;}
+  createNewMeet(name,date,model,false);
+  applyLoadedState();
+  document.getElementById('nmName').value='';
+  document.getElementById('nmDate').value='';
+  renderMeetList();
+  closeMeetMgr();
+}
+
+function createMeetWithPreload(){
+  var name=document.getElementById('nmName').value.trim()||'2025 NCAA D3 Women';
+  var date=document.getElementById('nmDate').value;
+  var model=document.getElementById('nmModel').value;
+  createNewMeet(name,date,model,true);
+  applyLoadedState();
+  document.getElementById('nmName').value='';
+  document.getElementById('nmDate').value='';
+  renderMeetList();
+  closeMeetMgr();
+  showSt('Loaded: '+S.events.length+' events, '+S.teams.length+' teams (2025 NCAA D3 Women)','ok');
+}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function showSt(msg,type){var el=document.getElementById('ps');el.textContent=msg;el.className='st '+type;}
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 
 function init(){
-  load();
   document.getElementById('pfu').addEventListener('change',function(){
     if(this.files[0])handlePDF(this.files[0]);
   });
-  document.getElementById('mn').value=S.meetName||'';
-  document.getElementById('md').value=S.meetDate||'';
-  document.getElementById('ht').value=S.homeTeam||'Emory';
-  document.getElementById('sm').value=S.scoringModel||'uaa';
-  if(S.meetName){document.getElementById('hmeta').textContent=S.meetName+(S.meetDate?' · '+S.meetDate:'');}
-  // Restore session pill states
-  document.querySelectorAll('#ssp .pill').forEach(function(p){p.classList.remove('active');});
-  var sp=document.querySelector('#ssp .pill[onclick*="'+S.session+'"]');if(sp)sp.classList.add('active');
-  document.querySelectorAll('#psp .pill').forEach(function(p){p.classList.remove('active');});
-  var pp=document.querySelector('#psp .pill[onclick*="'+S.projSession+'"]');if(pp)pp.classList.add('active');
-  // Load preloaded psych if no saved events
-  if(!S.events||!S.events.length){
-    if(PRELOADED_PSYCH&&PRELOADED_PSYCH.events.length){
-      S.events=PRELOADED_PSYCH.events;
-      S.teams=PRELOADED_PSYCH.teams;
-      S.activeTeams=PRELOADED_PSYCH.teams.slice();
-      S.liveResults={};
-      autoDays();
-      showSt('Loaded: '+S.events.length+' events, '+S.teams.length+' teams (2025 NCAA D3 Women)','ok');
-      document.getElementById('pps').style.display='block';
-      renderSetup();
-      save();
-    }
+
+  var meta=getMeta();
+
+  if(!meta.length){
+    // First ever launch — create the preloaded meet
+    createFirstMeet();
+    applyLoadedState();
+    showSt('Loaded: '+S.events.length+' events, '+S.teams.length+' teams (2025 NCAA D3 Women)','ok');
   } else {
-    document.getElementById('pps').style.display='block';
-    renderSetup();
+    // Restore last active meet
+    var lastId=null;
+    try{lastId=localStorage.getItem('swimscore_active_id');}catch(e){}
+    var target=lastId&&meta.find(function(x){return x.id===lastId;})?lastId:meta[meta.length-1].id;
+    loadMeet(target);
+    applyLoadedState();
   }
 }
 
