@@ -47,9 +47,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--fd);font-size:14px
 a{color:var(--gold);}
 
 /* Layout */
-.hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;gap:1rem;}
-.logo{font-family:var(--fm);font-size:1.1rem;font-weight:700;color:var(--gold);letter-spacing:.05em;}
-.hmeta{font-size:.75rem;color:var(--text-dim);font-family:var(--fm);}
+.hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:.6rem 1rem;display:flex;align-items:center;gap:.4rem;flex-wrap:nowrap;overflow:hidden;}
+.logo{font-family:var(--fm);font-size:.9rem;font-weight:700;color:var(--gold);letter-spacing:.05em;white-space:nowrap;}
+@media(min-width:480px){.logo{font-size:1.1rem;}}
+.hmeta{font-size:.7rem;color:var(--text-dim);font-family:var(--fm);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .wrap{max-width:1200px;margin:0 auto;padding:1.5rem;}
 
 /* Tabs */
@@ -64,6 +65,10 @@ a{color:var(--gold);}
 .ct{font-family:var(--fm);font-size:.7rem;letter-spacing:.12em;color:var(--text-dim);margin-bottom:.875rem;text-transform:uppercase;}
 .cgrid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
 @media(max-width:640px){.cgrid{grid-template-columns:1fr;}}
+#dbarcharts{display:grid;gap:1rem;grid-template-columns:1fr 1fr;}
+@media(max-width:640px){#dbarcharts{grid-template-columns:1fr !important;}}
+@media(min-width:641px) and (max-width:900px){#dbarcharts[data-cols="3"],#dbarcharts[data-cols="4"],#dbarcharts[data-cols="5"]{grid-template-columns:1fr 1fr !important;}}
+@media(min-width:901px){#dbarcharts[data-cols="3"]{grid-template-columns:1fr 1fr 1fr;}#dbarcharts[data-cols="4"]{grid-template-columns:1fr 1fr 1fr 1fr;}#dbarcharts[data-cols="5"]{grid-template-columns:1fr 1fr 1fr 1fr 1fr;}}
 
 /* Form */
 .frow{display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end;}
@@ -201,7 +206,11 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .sync-err{background:var(--red);}
 .sync-wait{background:var(--gold);animation:pulse .8s infinite;}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
-.sync-bar{display:flex;align-items:center;font-size:.7rem;font-family:var(--fm);color:var(--text-dim);gap:.25rem;margin-left:.75rem;}
+.sync-bar{display:flex;align-items:center;font-size:.7rem;font-family:var(--fm);color:var(--text-dim);gap:.25rem;flex-shrink:0;}
+.sync-msg{display:none;}
+@media(min-width:480px){.sync-msg{display:inline;}}
+.sync-msg{display:none;}
+@media(min-width:500px){.sync-msg{display:inline;}}
 .share-link{font-size:.72rem;font-family:var(--fm);color:var(--gold);cursor:pointer;text-decoration:underline;margin-left:.5rem;}
 .share-link:hover{color:var(--gold2);}
 
@@ -218,8 +227,8 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 <div class="hdr">
   <div class="logo">&#9652; SWIMSCORE</div>
   <div class="hmeta" id="hmeta">No meet loaded</div>
-  <div class="sync-bar" id="syncBar"><span class="sync-dot sync-wait" id="syncDot"></span><span id="syncMsg">Connecting...</span></div>
-  <button class="bmeets" onclick="openMeetMgr()" style="margin-left:.75rem">&#128193; Meets</button>
+  <div class="sync-bar" id="syncBar"><span class="sync-dot sync-wait" id="syncDot"></span><span class="sync-msg" id="syncMsg">Connecting...</span></div>
+  <button class="bmeets" onclick="openMeetMgr()">&#128193; Meets</button>
 </div>
 
 <!-- Meet Manager Modal -->
@@ -247,6 +256,7 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
         <div style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
           <button class="btn bprimary" onclick="createMeet()">&#43; Create Empty Meet</button>
           <button class="btn" onclick="createMeetWithPreload()">&#9733; Create with 2025 NCAA D3 Women Data</button>
+          <button class="btn" onclick="downloadHTML()" style="margin-left:auto">&#8595; Download HTML</button>
         </div>
       </div>
       <div id="shareSection" style="display:none;margin-top:1rem">
@@ -1101,9 +1111,9 @@ function renderDepthSetup(){
   }
   document.getElementById('dtselectors').innerHTML=sh;
 
-  // Set grid columns based on n
-  var cols=n<=2?'1fr 1fr':n===3?'1fr 1fr 1fr':n<=4?'1fr 1fr 1fr 1fr':'1fr 1fr 1fr 1fr 1fr';
-  document.getElementById('dbarcharts').style.gridTemplateColumns=cols;
+  // Set grid columns — capped at 2 on mobile via CSS, up to n on wider screens
+  document.getElementById('dbarcharts').setAttribute('data-cols', n);
+  document.getElementById('dbarcharts').style.gridTemplateColumns='';
 
   renderDepth();
 }
