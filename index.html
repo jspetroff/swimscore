@@ -561,14 +561,22 @@ function subscribeMeet(id){
   if(_unsubMeet){_unsubMeet();_unsubMeet=null;}
   if(!window._fbReady)return;
 
-  var gotPsych=null, gotLive=null;
+  var gotPsych=null, gotLive=null, _initialDone=false;
 
   function merge(){
     if(!gotPsych||!gotLive)return;
     var merged=Object.assign({},gotPsych,{liveResults:gotLive.liveResults||{}});
-    // Only apply if this is coming from another device (avoid overwriting local edits mid-entry)
     Object.assign(S,merged);
-    applyLoadedState();
+    if(!_initialDone){
+      _initialDone=true;
+      applyLoadedState();
+    } else {
+      // Subsequent updates from other devices — refresh data only, never reset tabs
+      updLB();updClinch();
+      if(document.getElementById('tab-live').classList.contains('act')){
+        renderLiveEvs();
+      }
+    }
     setSyncStatus('ok','Live');
   }
 
@@ -579,10 +587,6 @@ function subscribeMeet(id){
   var unsubLive=window._fsOnSnapshot(fsMeetLiveDoc(id),function(snap){
     if(snap.exists()){gotLive=snap.data();}else{gotLive={liveResults:{}};}
     merge();
-    // Also update just the live leaderboard without full re-render for performance
-    if(document.getElementById('tab-live').classList.contains('act')){
-      updLB();updClinch();
-    }
   },function(e){setSyncStatus('err','Sync error');});
 
   _unsubMeet=function(){unsubPsych();unsubLive();};
