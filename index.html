@@ -567,8 +567,9 @@ function save(){
   var m=meta.find(function(x){return x.id===ACTIVE_ID;});
   if(m){m.name=S.meetName||'Unnamed Meet';m.date=S.meetDate;m.model=S.scoringModel;}
   saveLsMeta(meta);
-  // Cloud save (async, fire and forget)
+  // Cloud save — flag as local so snapshot echo doesn't collapse UI
   if(window._fbReady){
+    if(_unsubMeet&&_unsubMeet._setLocalSave)_unsubMeet._setLocalSave();
     fsSaveMeet(ACTIVE_ID, data);
     fsUpdateMeta(meta);
     setSyncStatus('ok','Synced');
@@ -580,7 +581,7 @@ function subscribeMeet(id){
   if(_unsubMeet){_unsubMeet();_unsubMeet=null;}
   if(!window._fbReady)return;
 
-  var gotPsych=null, gotLive=null, _initialDone=false;
+  var gotPsych=null, gotLive=null, _initialDone=false, _localSave=false;
 
   function merge(){
     if(!gotPsych||!gotLive)return;
@@ -589,13 +590,21 @@ function subscribeMeet(id){
     if(!_initialDone){
       _initialDone=true;
       applyLoadedState();
-    } else {
-      // Subsequent updates from other devices — refresh data only, never reset tabs
+    } else if(!_localSave){
+      // Update from another device — refresh data displays
       updLB();updClinch();
       if(document.getElementById('tab-live').classList.contains('act')){
+        // Preserve open accordions
+        var open=[];
+        document.querySelectorAll('.eb.open').forEach(function(el){open.push(el.id);});
         renderLiveEvs();
+        open.forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('open');});
       }
+    } else {
+      // Our own save echoed back — just update scores, don't touch the DOM
+      updLB();updClinch();
     }
+    _localSave=false;
     setSyncStatus('ok','Live');
   }
 
@@ -608,7 +617,9 @@ function subscribeMeet(id){
     merge();
   },function(e){setSyncStatus('err','Sync error');});
 
-  _unsubMeet=function(){unsubPsych();unsubLive();};
+  var unsub=function(){unsubPsych();unsubLive();};
+  unsub._setLocalSave=function(){_localSave=true;};
+  _unsubMeet=unsub;
 }
 
 // ── Subscribe to meets list ───────────────────────────────────────────────
