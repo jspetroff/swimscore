@@ -1298,7 +1298,7 @@ function renderEventBody(gi){
   }
 
   // Column headers
-  var col3hdr=(mode==='final'&&hasPrelim)?'Prelim &#8594; Final':'Psych seed';
+  var col3hdr=(mode==='final'&&hasPrelim)?'Prelim&#8594;Final pts':'Psych seed';
   h+='<div class="pg">';
   h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span>TIE</span><span>SCR</span></div>';
 
@@ -1312,12 +1312,23 @@ function renderEventBody(gi){
     S.activeTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
     var refCell='';
     if(mode==='final'&&hasPrelim){
-      var prelimPlace=-1;
-      if(tm){for(var pi=0;pi<prelimRes.length;pi++){if(prelimRes[pi]&&prelimRes[pi].team===tm){prelimPlace=pi+1;break;}}}
-      if(prelimPlace>0){
-        var delta=prelimPlace-(rk+1);
-        var dStr=delta>0?'<span style="color:var(--green)">&#9650;'+delta+'</span>':delta<0?'<span style="color:var(--red)">&#9660;'+Math.abs(delta)+'</span>':'<span style="color:var(--text-dim)">=</span>';
-        refCell='<span style="font-size:.7rem;white-space:nowrap">'+prelimPlace+'&#8594;'+(rk+1)+' '+dStr+'</span>';
+      var pts_arr=mpts(ev.isRelay);
+      var prelimPts=0,prelimIdx=-1;
+      if(tm){
+        for(var pi=0;pi<prelimRes.length;pi++){
+          if(prelimRes[pi]&&prelimRes[pi].team===tm&&!prelimRes[pi].scratch){
+            prelimIdx=pi;prelimPts=pts_arr[pi]||0;break;
+          }
+        }
+      }
+      var finalPts=pts_arr[rk]||0;
+      if(tm&&prelimIdx>=0){
+        var ptDelta=finalPts-prelimPts;
+        var ptStr=ptDelta>0?'<span style="color:var(--green);font-weight:600">+'+ptDelta+'</span>':ptDelta<0?'<span style="color:var(--red);font-weight:600">'+ptDelta+'</span>':'<span style="color:var(--text-dim)">&#177;0</span>';
+        refCell='<span style="font-size:.7rem;white-space:nowrap">'+prelimPts+'&#8594;'+finalPts+' pts '+ptStr+'</span>';
+      } else if(tm){
+        var finalPts2=pts_arr[rk]||0;
+        refCell='<span style="font-size:.7rem;color:var(--text-dim);white-space:nowrap">no prelim &#8594; '+finalPts2+' pts</span>';
       } else {
         refCell='<span style="color:var(--text-dim);font-size:.7rem">—</span>';
       }
