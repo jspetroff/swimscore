@@ -1313,22 +1313,36 @@ function renderEventBody(gi){
     var refCell='';
     if(mode==='final'&&hasPrelim){
       var pts_arr=mpts(ev.isRelay);
-      var prelimPts=0,prelimIdx=-1;
+      var finalPts=pts_arr[rk]||0;
+      // Find all prelim places for this team (could be multiple swimmers)
+      var teamPrelimPlaces=[];
       if(tm){
         for(var pi=0;pi<prelimRes.length;pi++){
           if(prelimRes[pi]&&prelimRes[pi].team===tm&&!prelimRes[pi].scratch){
-            prelimIdx=pi;prelimPts=pts_arr[pi]||0;break;
+            teamPrelimPlaces.push({idx:pi,pts:pts_arr[pi]||0});
           }
         }
       }
-      var finalPts=pts_arr[rk]||0;
+      var prelimPts=null,prelimIdx=-1;
+      if(teamPrelimPlaces.length===1){
+        // Only one swimmer — straightforward
+        prelimIdx=teamPrelimPlaces[0].idx;
+        prelimPts=teamPrelimPlaces[0].pts;
+      } else if(teamPrelimPlaces.length>1){
+        // Multiple swimmers — match to closest prelim place to current finals place
+        var best=null,bestDist=Infinity;
+        for(var k=0;k<teamPrelimPlaces.length;k++){
+          var dist=Math.abs(teamPrelimPlaces[k].idx-rk);
+          if(dist<bestDist){bestDist=dist;best=teamPrelimPlaces[k];}
+        }
+        if(best){prelimIdx=best.idx;prelimPts=best.pts;}
+      }
       if(tm&&prelimIdx>=0){
         var ptDelta=finalPts-prelimPts;
         var ptStr=ptDelta>0?'<span style="color:var(--green);font-weight:600">+'+ptDelta+'</span>':ptDelta<0?'<span style="color:var(--red);font-weight:600">'+ptDelta+'</span>':'<span style="color:var(--text-dim)">&#177;0</span>';
         refCell='<span style="font-size:.7rem;white-space:nowrap">'+prelimPts+'&#8594;'+finalPts+' pts '+ptStr+'</span>';
       } else if(tm){
-        var finalPts2=pts_arr[rk]||0;
-        refCell='<span style="font-size:.7rem;color:var(--text-dim);white-space:nowrap">no prelim &#8594; '+finalPts2+' pts</span>';
+        refCell='<span style="font-size:.7rem;color:var(--text-dim);white-space:nowrap">no prelim &#8594; '+finalPts+' pts</span>';
       } else {
         refCell='<span style="color:var(--text-dim);font-size:.7rem">—</span>';
       }
