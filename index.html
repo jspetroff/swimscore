@@ -1280,6 +1280,13 @@ function evMode(gi){return S.liveMode[gi]||'prelim';}
 function setEvMode(gi,mode){
   if(!S.liveMode)S.liveMode={};
   S.liveMode[gi]=mode;
+  // When switching to final, auto-populate from prelim if prelim is complete and finals are empty
+  if(mode==='final'){
+    var d=getLR(gi);
+    var hasPrelim=d.prelim&&d.prelim.some(function(x){return x&&x.team;});
+    var hasFinal=d.final&&d.final.some(function(x){return x&&x.team;});
+    if(hasPrelim&&!hasFinal){mkDone(gi);}
+  }
   // Re-render just this event's body — do NOT call renderLiveEvs (resets tab)
   renderEventBody(gi);
 }
