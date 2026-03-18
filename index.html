@@ -168,6 +168,7 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .tag{font-size:.62rem;font-family:var(--fm);padding:.15rem .4rem;border-radius:3px;font-weight:700;}
 .tgi{background:rgba(92,155,224,.15);color:var(--blue);}
 .tgr{background:rgba(201,168,76,.15);color:var(--gold);}
+.tgd{background:rgba(155,127,232,.15);color:#9b7fe8;}
 .epb{font-size:.7rem;font-family:var(--fm);color:var(--text-dim);}
 .eb{display:none;padding:.75rem 1rem;border-top:1px solid var(--border);}
 .eb.open{display:block;}
@@ -758,6 +759,24 @@ function checkShareLink(){
   return false;
 }
 
+function injectDivingEvents(){
+  // Auto-add 1m and 3m diving for each gender present in the meet
+  if(!S.events||!S.events.length)return;
+  var genders=[];
+  S.events.forEach(function(ev){if(ev.gender&&genders.indexOf(ev.gender)<0)genders.push(ev.gender);});
+  var diveNames=['1m Springboard','3m Springboard'];
+  var maxNum=0;S.events.forEach(function(ev){if((ev.num||0)>maxNum)maxNum=ev.num;});
+  genders.forEach(function(g){
+    diveNames.forEach(function(dn,di){
+      var exists=S.events.some(function(ev){return ev.isDiving&&ev.name===dn&&ev.gender===g;});
+      if(!exists){
+        maxNum++;
+        S.events.push({num:maxNum,gender:g,name:dn,isRelay:false,isDiving:true,entries:[],active:true,day:4});
+      }
+    });
+  });
+}
+
 function applyLoadedState(){
   document.getElementById('mn').value=S.meetName||'';
   document.getElementById('md').value=S.meetDate||'';
@@ -769,7 +788,7 @@ function applyLoadedState(){
   document.querySelectorAll('#ssp .pill').forEach(function(p){if(p.getAttribute('onclick')&&p.getAttribute('onclick').indexOf("'"+S.session+"'")>=0)p.classList.add('active');});
   document.querySelectorAll('#psp .pill').forEach(function(p){p.classList.remove('active');});
   document.querySelectorAll('#psp .pill').forEach(function(p){if(p.getAttribute('onclick')&&p.getAttribute('onclick').indexOf("'"+S.projSession+"'")>=0)p.classList.add('active');});
-  if(S.events&&S.events.length){document.getElementById('pps').style.display='block';renderSetup();}
+  if(S.events&&S.events.length){injectDivingEvents();document.getElementById('pps').style.display='block';renderSetup();}
   else{document.getElementById('pps').style.display='none';renderSetup();}
   // Reset tabs to setup
   showTab('setup',document.querySelector('.tb'));
@@ -911,7 +930,7 @@ function parseSheet(raw){
   if(!events.length){showSt('No events found. Check format: "Event 1 Women 500 Freestyle"','err');return;}
   var ts={};
   events.forEach(function(ev){ev.entries.forEach(function(en){if(en.team)ts[en.team]=1;});});
-  S.events=events;S.teams=Object.keys(ts).sort();S.activeTeams=S.teams.slice();S.liveResults={};
+  S.events=events;S.teams=Object.keys(ts).sort();S.activeTeams=S.teams.slice();S.liveResults={};injectDivingEvents();
   autoDays();
   showSt('Loaded: '+events.length+' events, '+tot+' entries, '+S.teams.length+' teams','ok');
   document.getElementById('pps').style.display='block';
@@ -1275,7 +1294,8 @@ function renderLive(){
 }
 
 // ── Prelim/Final helpers ──────────────────────────────────────────────────
-function isTimedFinal(ev){return /1650|1500/i.test(ev.name);}
+function isDiving(ev){return !!(ev&&ev.isDiving);}
+function isTimedFinal(ev){return isDiving(ev)||/1650|1500/i.test(ev.name);}
 function evMode(gi){return S.liveMode[gi]||'prelim';}
 function setEvMode(gi,mode){
   if(!S.liveMode)S.liveMode={};
@@ -1431,14 +1451,14 @@ function renderLiveEvs(){
     var hasFinal=d.final.some(function(x){return x&&x.team;});
     var hasAny=hasPrelim||hasFinal;
     var stcls=hasFinal?'done':hasAny?'partial':'pending';
-    var tagcls=ev.isRelay?'tgr':'tgi';
+    var tagcls=ev.isRelay?'tgr':isDiving(ev)?'tgd':'tgi';
     var label=statusLabel(gi);
 
     h+='<div class="ea" id="ea'+gi+'">';
     h+='<div class="ehr '+stcls+'" id="eh'+gi+'" onclick="togAcc('+gi+')">';
     h+='<span class="en">E'+ev.num+'</span>';
     h+='<span class="enm">'+ev.gender+' '+ev.name+(isTF?'<span class="timed-final-badge" style="font-size:.6rem;font-family:var(--fm);padding:.15rem .4rem;border-radius:3px;background:rgba(76,175,125,.15);color:var(--green);border:1px solid rgba(76,175,125,.3);margin-left:.5rem">TIMED FINAL</span>':'')+'</span>';
-    h+='<span class="tag '+tagcls+'">'+(ev.isRelay?'RELAY':'IND')+'</span>';
+    h+='<span class="tag '+tagcls+'">'+(ev.isRelay?'RELAY':isDiving(ev)?'DIVE':'IND')+'</span>';
     h+='<span class="epb" id="epb'+gi+'">'+label+'</span>';
     h+='<span style="color:var(--text-dim);font-size:.8rem">&#9662;</span>';
     h+='</div>';
