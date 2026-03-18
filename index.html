@@ -1635,63 +1635,104 @@ function updFinalsBreakdown(){
   document.getElementById('lfinbd').innerHTML=bh;
 }
 
+function ptsFromRes(res,pts){
+  var teamPts={};
+  if(!res||!res.length)return teamPts;
+  var rk=0;
+  res.forEach(function(x){
+    if(!x||x.scratch||!x.team)return;
+    if(rk<pts.length){teamPts[x.team]=(teamPts[x.team]||0)+pts[rk];rk++;}
+  });
+  return teamPts;
+}
+
 function updLiveBreakdown(){
   var home=S.homeTeam;
   var sc=liveScores();
-  var teams=Object.keys(sc).sort(function(a,b){return sc[b]-sc[a];}); // sorted by points
+  var teams=Object.keys(sc).sort(function(a,b){return sc[b]-sc[a];});
   var evs=actEvs(S.liveSession);
 
-  // Build per-event actual scored points from liveResults
+  // Build per-event psych / prelim / final scores
   var evScores=[];
   evs.forEach(function(ev){
     var gi=S.events.indexOf(ev);
     var d=getLR(gi);
-    var res=d.final.some(function(x){return x&&x.team;})?d.final:
-            (isTimedFinal(ev)?d.prelim:[]);
-    var teamPts={};teams.forEach(function(t){teamPts[t]=0;});
-    if(res&&res.length){
-      var pts=mpts(ev.isRelay);
-      var rk=0;
-      res.forEach(function(x){
-        if(!x||x.scratch||!x.team)return;
-        if(rk<pts.length&&teamPts[x.team]!==undefined){teamPts[x.team]+=pts[rk];rk++;}
-      });
-    }
-    evScores.push({ev:ev,sc:teamPts,entered:!!res&&res.some(function(x){return x&&x.team;})});
+    var pts=mpts(ev.isRelay);
+    var isTF=isTimedFinal(ev);
+    // Psych score from seed order
+    var psychRes=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;})
+      .map(function(e){return{team:e.team,scratch:false};});
+    var psychPts=ptsFromRes(psychRes,pts);
+    // Prelim
+    var prelimRes=d.prelim||[];
+    var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
+    var prelimPts=hasPrelim?ptsFromRes(prelimRes,pts):{};
+    // Final (or prelim for timed finals)
+    var finalRes=d.final&&d.final.some(function(x){return x&&x.team;})?d.final:
+                 (isTF&&hasPrelim?d.prelim:[]);
+    var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;});
+    var finalPts=hasFinal?ptsFromRes(finalRes,pts):{};
+    evScores.push({ev:ev,psychPts:psychPts,prelimPts:prelimPts,finalPts:finalPts,
+                   hasPrelim:hasPrelim,hasFinal:hasFinal,entered:hasPrelim||hasFinal,isTF:isTF});
   });
 
-  // Header
-  var hdr='<th style="white-space:nowrap">Event</th>';
+  // Header row 1: team names spanning 3 cols each
+  var hdr='<th rowspan="2" style="white-space:nowrap;border-right:1px solid var(--border);vertical-align:bottom">Event</th>';
   teams.forEach(function(t){
-    hdr+='<th style="white-space:nowrap'+(t===home?';color:var(--gold)':'')+'">'
-      +esc(t)+(t===home?' &#127968;':'')+'</th>';
+    var isHome=t===home;
+    hdr+='<th colspan="3" style="text-align:center;white-space:nowrap;border-right:1px solid var(--border);padding-bottom:.2rem'+(isHome?';color:var(--gold)':'')+'">'
+        +esc(t)+(isHome?' &#127968;':'')+'</th>';
+  });
+  // Header row 2: PSY / PRE / FIN sub-labels
+  hdr+='</tr><tr>';
+  teams.forEach(function(){
+    hdr+='<th style="font-size:.6rem;color:var(--text-dim);font-family:var(--fm);padding:.1rem .3rem;text-align:center">PSY</th>';
+    hdr+='<th style="font-size:.6rem;color:var(--text-dim);font-family:var(--fm);padding:.1rem .3rem;text-align:center">PRE</th>';
+    hdr+='<th style="font-size:.6rem;color:var(--gold);font-family:var(--fm);padding:.1rem .3rem;text-align:center;border-right:1px solid var(--border)">FIN</th>';
   });
   document.getElementById('lebhdr').innerHTML=hdr;
 
-  // Rows — only show events that have at least one result entered
+  // Data rows
   var bh='';
   var anyEntered=false;
+  var totPsy={},totPre={},totFin={};
+  teams.forEach(function(t){totPsy[t]=0;totPre[t]=0;totFin[t]=0;});
+
   evScores.forEach(function(item){
     if(!item.entered)return;
     anyEntered=true;
-    var bestPts=0;teams.forEach(function(t){if((item.sc[t]||0)>bestPts)bestPts=item.sc[t]||0;});
     bh+='<tr>';
-    bh+='<td style="font-size:.75rem;white-space:nowrap;font-family:var(--fm)">E'+item.ev.num+' '+esc(item.ev.name)+'</td>';
+    bh+='<td style="font-size:.72rem;white-space:nowrap;font-family:var(--fm);border-right:1px solid var(--border)">E'+item.ev.num+' '+esc(item.ev.name)+'</td>';
     teams.forEach(function(t){
-      var v=item.sc[t]||0;
-      var isBest=v>0&&v===bestPts;
-      bh+='<td style="'+(isBest?'color:var(--gold);font-weight:700':v>0?'':'color:var(--text-dim)')+'">'+(v>0?v.toFixed(0):'—')+'</td>';
+      var psy=item.psychPts[t]||0;
+      var pre=item.hasPrelim?(item.prelimPts[t]||0):null;
+      var fin=item.hasFinal?(item.finalPts[t]||0):null;
+      totPsy[t]+=psy;
+      if(pre!==null)totPre[t]+=pre;
+      if(fin!==null)totFin[t]+=fin;
+      function fmtCell(val,base,isFin){
+        var s='font-size:.72rem;text-align:center;padding:.25rem .3rem;';
+        if(val===null)return '<td style="'+s+'color:var(--text-dim)">—</td>';
+        if(isFin){s+=val>base?'color:var(--green);font-weight:600':val<base?'color:var(--red)':'';s+=';border-right:1px solid var(--border)';}
+        return '<td style="'+s+'">'+(val>0?val.toFixed(0):'<span style="color:var(--text-dim)">—</span>')+'</td>';
+      }
+      bh+=fmtCell(psy,psy,false);
+      bh+=fmtCell(pre,psy,false);
+      bh+=fmtCell(fin,psy,true);
     });
     bh+='</tr>';
   });
 
   if(!anyEntered){
-    bh='<tr><td colspan="99" style="color:var(--text-dim);text-align:center;padding:1.5rem">No results entered yet.</td></tr>';
+    bh='<tr><td colspan="999" style="color:var(--text-dim);text-align:center;padding:1.5rem">No results entered yet.</td></tr>';
   } else {
-    // Totals row
-    bh+='<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--bg3)"><td>TOTAL</td>';
+    bh+='<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--bg3)"><td style="border-right:1px solid var(--border)">TOTAL</td>';
     teams.forEach(function(t){
-      bh+='<td>'+sc[t].toFixed(0)+'</td>';
+      var fin=totFin[t],psy=totPsy[t];
+      var col=fin>psy?'color:var(--green)':fin<psy?'color:var(--red)':'';
+      bh+='<td style="font-size:.72rem;text-align:center">'+totPsy[t].toFixed(0)+'</td>';
+      bh+='<td style="font-size:.72rem;text-align:center">'+totPre[t].toFixed(0)+'</td>';
+      bh+='<td style="font-size:.72rem;text-align:center;'+col+';border-right:1px solid var(--border)">'+fin.toFixed(0)+'</td>';
     });
     bh+='</tr>';
   }
