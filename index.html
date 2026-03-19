@@ -1003,6 +1003,9 @@ function addTeamManually(){
   inp.value='';
   renderTmCl();
   save();
+  // Rebuild live dropdowns and scores so new team appears immediately
+  if(document.getElementById('lev'))renderLiveEvs();
+  updLB();updClinch();
 }
 function togTm(t,on){if(on){if(S.activeTeams.indexOf(t)<0)S.activeTeams.push(t);}else{S.activeTeams=S.activeTeams.filter(function(x){return x!==t;});}save();}
 function togEv(i,on){S.events[i].active=on;save();}
