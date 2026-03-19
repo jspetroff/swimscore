@@ -344,6 +344,10 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
             <button class="btn bto bsm" onclick="setAllTm(false)">None</button>
           </span></div>
           <div class="cl" id="tc"></div>
+          <div style="display:flex;gap:.5rem;margin-top:.75rem">
+            <input type="text" id="newTeamInput" placeholder="Add team manually..." onkeydown="if(event.key==='Enter')addTeamManually()" style="flex:1;font-size:.78rem;padding:.35rem .6rem">
+            <button class="btn bsm" onclick="addTeamManually()">+ Add</button>
+          </div>
         </div>
         <div class="card">
           <div class="ct">Events <span style="font-size:.75rem;color:var(--text-dim)">(toggle &middot; assign day)</span></div>
@@ -984,6 +988,16 @@ function renderEvCl(){
 }
 
 function setAllTm(on){S.activeTeams=on?S.teams.slice():[];renderTmCl();save();}
+function addTeamManually(){
+  var inp=document.getElementById('newTeamInput');
+  var t=(inp.value||'').trim();
+  if(!t)return;
+  if(S.teams.indexOf(t)<0){S.teams.push(t);S.teams.sort();}
+  if(S.activeTeams.indexOf(t)<0){S.activeTeams.push(t);}
+  inp.value='';
+  renderTmCl();
+  save();
+}
 function togTm(t,on){if(on){if(S.activeTeams.indexOf(t)<0)S.activeTeams.push(t);}else{S.activeTeams=S.activeTeams.filter(function(x){return x!==t;});}save();}
 function togEv(i,on){S.events[i].active=on;save();}
 function setDay(i,d){S.events[i].day=parseInt(d);save();}
@@ -1295,7 +1309,7 @@ function renderLive(){
 
 // ── Prelim/Final helpers ──────────────────────────────────────────────────
 function isDiving(ev){return !!(ev&&ev.isDiving);}
-function isTimedFinal(ev){return isDiving(ev)||/1650|1500/i.test(ev.name);}
+function isTimedFinal(ev){return !isDiving(ev)&&/1650|1500/i.test(ev.name);}
 function evMode(gi){return S.liveMode[gi]||'prelim';}
 function setEvMode(gi,mode){
   if(!S.liveMode)S.liveMode={};
@@ -1472,7 +1486,8 @@ function renderLiveEvs(){
 function togAcc(gi){var b=document.getElementById('eb'+gi);if(b)b.classList.toggle('open');}
 
 function setLR(gi,rk,f,v){
-  var mode=evMode(gi);
+  var ev=S.events[gi];
+  var mode=(ev&&isTimedFinal(ev))?'final':evMode(gi);
   var d=S.liveResults[gi];
   if(!d||Array.isArray(d))S.liveResults[gi]={prelim:Array.isArray(d)?d:[],final:[]};
   if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
