@@ -1363,13 +1363,14 @@ function renderEventBody(gi){
   // Column headers
   var col3hdr=(mode==='final'&&hasPrelim)?'Prelim&#8594;Final pts':'Psych seed';
   h+='<div class="pg">';
-  h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span>TIE</span><span>SCR</span></div>';
+  h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span>TIE</span><span>SCR</span><span>DQ</span></div>';
 
   for(var rk=0;rk<pts.length;rk++){
     var r=res[rk]||{};
     var ps=entries[rk]||{};
     var tm=r.team!==undefined?r.team:'';
     var sc2=r.scratch?'checked':'';
+    var dq2=r.dq?'checked':'';
     var tie2=r.tie?'checked':'';
     var opts='<option value="">—</option>';
     S.activeTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
@@ -1412,12 +1413,13 @@ function renderEventBody(gi){
     } else {
       refCell='<span style="color:var(--text-dim);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ps.team||'—')+'</span>';
     }
-    h+='<div class="pr" style="grid-template-columns:32px 1fr 1fr auto auto">';
-    h+='<span class="pn">'+(rk+1)+'</span>';
+    h+='<div class="pr" style="grid-template-columns:32px 1fr 1fr auto auto auto">';
+    h+='<span class="pn" style="'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'+(rk+1)+(r.dq?' DQ':'')+'</span>';
     h+='<select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>';
     h+=refCell;
     h+='<label class="sc" title="Ties with place above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
     h+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
+    h+='<label class="sc" title="DQ"><input type="checkbox" '+dq2+' onchange="setLR('+gi+','+rk+',\'dq\',this.checked)"></label>';
     h+='</div>';
   }
   h+='</div>';
@@ -1426,7 +1428,7 @@ function renderEventBody(gi){
   h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">';
   h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">'+chalkLabel+'</button>';
   h+='<button class="btn bsm" onclick="clrEv('+gi+')">Clear</button>';
-  h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">TIE = ties with row above</span>';
+  h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">TIE = ties above &middot; SCR = scratch &middot; DQ = disqualified</span>';
   h+='</div>';
   eb.innerHTML=h;
 }
@@ -1555,7 +1557,7 @@ function liveScores(){
     // Build list of non-scratched finishers
     var finishers=[];
     res.forEach(function(x,rk){
-      if(!x||x.scratch||!x.team)return;
+      if(!x||x.scratch||x.dq||!x.team)return;
       finishers.push({team:x.team,rk:rk,tie:!!x.tie});
     });
     // Score with tie averaging: find tie groups
