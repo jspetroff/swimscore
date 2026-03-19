@@ -478,7 +478,7 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
       </div>
       <div class="card">
         <div class="ct">Adjusted Projection <span style="font-size:.68rem;font-weight:400;color:var(--text-dim)">&mdash; current pace applied to remaining events</span></div>
-        <div id="projAdj">
+        <div id="projAdj" style="max-height:340px;overflow-y:auto">
           <div style="color:var(--text-dim);font-size:.82rem">Enter results to generate projection.</div>
         </div>
       </div>
@@ -1868,9 +1868,9 @@ function updProjection(){
       +completedEvs.length+' of '+allEvs.length+' events scored &middot; '
       +Math.round(pctDone*100)+'% complete</div>';
 
-  h+='<table class="lb lb-fixed" style="border-collapse:collapse">'
+  h+='<table class="lb lb-fixed" style="border-collapse:collapse;width:100%">'
     +'<colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col style="width:80px"><col style="width:80px"></colgroup>'
-    +'<thead><tr>'
+    +'<thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr>'
     +'<th>#</th><th>Team</th>'
     +'<th title="Current scored points">Now</th>'
     +'<th title="Actual vs psych ratio on completed events" style="color:var(--text-dim)">Pace</th>'
