@@ -477,6 +477,12 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
         </div>
       </div>
       <div class="card">
+        <div class="ct">Adjusted Projection <span style="font-size:.68rem;font-weight:400;color:var(--text-dim)">&mdash; current pace applied to remaining events</span></div>
+        <div id="projAdj">
+          <div style="color:var(--text-dim);font-size:.82rem">Enter results to generate projection.</div>
+        </div>
+      </div>
+      <div class="card">
         <div class="ct">Session Filter</div>
         <div class="sp" id="lsp">
           <div class="pill active" onclick="setLiveSess('full',this)">Full Meet</div>
@@ -1799,6 +1805,96 @@ function updLB(){
   updFinalsBreakdown();
 }
 
+
+function updProjection(){
+  var sc=liveScores();
+  var home=S.homeTeam;
+  var teams=Object.keys(sc).sort(function(a,b){return sc[b]-sc[a];});
+  if(!teams.length){document.getElementById('projAdj').innerHTML='<div style="color:var(--text-dim);font-size:.82rem">No teams scored yet.</div>';return;}
+
+  var allEvs=actEvs('full');
+
+  // Separate completed vs remaining events
+  var done={};
+  Object.keys(S.liveResults).forEach(function(gi){
+    var d=S.liveResults[gi];
+    var finalRes=Array.isArray(d)?d:(d&&d.final||[]);
+    if(finalRes.some(function(x){return x&&x.team;}))done[parseInt(gi)]=1;
+  });
+  var completedEvs=allEvs.filter(function(ev){return done[S.events.indexOf(ev)];});
+  var remainingEvs=allEvs.filter(function(ev){return!done[S.events.indexOf(ev)];});
+
+  if(!completedEvs.length){
+    document.getElementById('projAdj').innerHTML='<div style="color:var(--text-dim);font-size:.82rem">Enter results to generate projection.</div>';
+    return;
+  }
+
+  // For each team: compute actual vs psych on completed events
+  var teamData={};
+  teams.forEach(function(t){
+    teamData[t]={actual:sc[t]||0,psychDone:0,psychRem:0};
+  });
+
+  // Psych score for completed events
+  completedEvs.forEach(function(ev){
+    var pts=mpts(ev.isRelay);
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    entries.forEach(function(en,idx){
+      if(idx<pts.length&&teamData[en.team]!==undefined){
+        teamData[en.team].psychDone+=pts[idx];
+      }
+    });
+  });
+
+  // Psych score for remaining events
+  remainingEvs.forEach(function(ev){
+    var pts=mpts(ev.isRelay);
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    entries.forEach(function(en,idx){
+      if(idx<pts.length&&teamData[en.team]!==undefined){
+        teamData[en.team].psychRem+=pts[idx];
+      }
+    });
+  });
+
+  // Compute ratio and projected final for each team
+  var projections=teams.map(function(t){
+    var d=teamData[t];
+    var ratio=d.psychDone>0?(d.actual/d.psychDone):1;
+    var projected=d.actual+(d.psychRem*ratio);
+    return{team:t,actual:d.actual,ratio:ratio,psychRem:d.psychRem,projected:projected};
+  }).sort(function(a,b){return b.projected-a.projected;});
+
+  var pctDone=completedEvs.length/(allEvs.length||1);
+  var h='<div style="font-size:.72rem;color:var(--text-dim);font-family:var(--fm);margin-bottom:.75rem">'
+      +completedEvs.length+' of '+allEvs.length+' events scored &middot; '
+      +Math.round(pctDone*100)+'% complete</div>';
+
+  h+='<table class="lb lb-fixed" style="border-collapse:collapse">'
+    +'<colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col style="width:80px"><col style="width:80px"></colgroup>'
+    +'<thead><tr>'
+    +'<th>#</th><th>Team</th>'
+    +'<th title="Current scored points">Now</th>'
+    +'<th title="Actual vs psych ratio on completed events" style="color:var(--text-dim)">Pace</th>'
+    +'<th title="Projected final score at current pace" style="color:var(--gold)">Proj</th>'
+    +'</tr></thead><tbody>';
+
+  projections.forEach(function(p,i){
+    var isHome=p.team===home;
+    var ratioCol=p.ratio>1.05?'color:var(--green)':p.ratio<0.95?'color:var(--red)':'color:var(--text-dim)';
+    var ratioStr=(p.ratio*100).toFixed(0)+'%';
+    h+='<tr'+(isHome?' style="background:rgba(201,168,76,.06)"':'')+'>';
+    h+='<td><span class="rb '+(i===0?'r1':i===1?'r2':i===2?'r3':'rx')+'">'+(i+1)+'</span></td>';
+    h+='<td class="lbtm">'+esc(p.team)+(isHome?' &#127968;':'')+'</td>';
+    h+='<td>'+p.actual.toFixed(1)+'</td>';
+    h+='<td style="font-family:var(--fm);font-size:.78rem;'+ratioCol+'">'+ratioStr+'</td>';
+    h+='<td style="font-family:var(--fm);font-weight:700;color:var(--gold)">'+p.projected.toFixed(1)+'</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById('projAdj').innerHTML=h;
+}
+
 function updClinch(){
   var sc=liveScores(),home=S.homeTeam,hs=sc[home]||0;
   var allTeams=Object.keys(sc).map(function(t){return{team:t,pts:sc[t]||0};}).sort(function(a,b){return b.pts-a.pts;});
@@ -1845,6 +1941,7 @@ function updClinch(){
   });
   var tbl=document.getElementById('clinchTbl');
   if(tbl)tbl.innerHTML=th;
+  updProjection();
 }
 
 // ── MEET MANAGER UI ───────────────────────────────────────────────────────
