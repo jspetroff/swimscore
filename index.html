@@ -1369,7 +1369,7 @@ function renderEventBody(gi){
   // Column headers
   var col3hdr=(mode==='final'&&hasPrelim)?'Prelim&#8594;Final pts':'Psych seed';
   h+='<div class="pg">';
-  h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span>TIE</span><span>SCR</span><span>DQ</span></div>';
+  h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span title="Check on the LOWER place to indicate a tie with the place above">=&#8593;</span><span>SCR</span><span>DQ</span></div>';
 
   for(var rk=0;rk<pts.length;rk++){
     var r=res[rk]||{};
@@ -1423,7 +1423,7 @@ function renderEventBody(gi){
     h+='<span class="pn" style="'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'+(rk+1)+(r.dq?' DQ':'')+'</span>';
     h+='<select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>';
     h+=refCell;
-    h+='<label class="sc" title="Ties with place above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
+    h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
     h+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
     h+='<label class="sc" title="DQ"><input type="checkbox" '+dq2+' onchange="setLR('+gi+','+rk+',\'dq\',this.checked)"></label>';
     h+='</div>';
@@ -1434,7 +1434,7 @@ function renderEventBody(gi){
   h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">';
   h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">'+chalkLabel+'</button>';
   h+='<button class="btn bsm" onclick="clrEv('+gi+')">Clear</button>';
-  h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">TIE = ties above &middot; SCR = scratch &middot; DQ = disqualified</span>';
+  h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">=&#8593; check on LOWER place to tie with place above &middot; SCR = scratch &middot; DQ = disqualified</span>';
   h+='</div>';
   eb.innerHTML=h;
 }
@@ -1566,16 +1566,14 @@ function liveScores(){
       if(!x||x.scratch||x.dq||!x.team)return;
       finishers.push({team:x.team,rk:rk,tie:!!x.tie});
     });
-    // Score with tie averaging: find tie groups
+    // Score ties: average the points across tied places (championship standard)
     var i=0;
     while(i<finishers.length){
       var rk=finishers[i].rk;
       if(rk>=pts.length){i++;continue;}
-      // Find how many are tied at this position (next entries marked tie:true)
       var j=i+1;
       while(j<finishers.length&&finishers[j].tie&&finishers[j].rk<pts.length)j++;
       var tieCount=j-i;
-      // Average points across tied places
       var psum=0;
       for(var k=rk;k<Math.min(rk+tieCount,pts.length);k++)psum+=pts[k];
       var sp=psum/tieCount;
