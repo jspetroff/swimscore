@@ -1718,7 +1718,7 @@ function updLiveBreakdown(){
     var finalPts=hasFinal?ptsFromRes(finalRes,pts):{};
     // Worst case: prelim done, final not yet — each team scores last place in their final tier
     var wcPts={};
-    if(hasPrelim&&!hasFinal&&!isTF){
+    if(hasPrelim&&!isTF){
       // Determine each finisher's final tier from prelim place
       var nonScr=[];
       prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq)nonScr.push(x.team);});
@@ -1734,7 +1734,7 @@ function updLiveBreakdown(){
     }
     // Best case: prelim done, final not yet — each team scores first place in their final tier
     var bcPts={};
-    if(hasPrelim&&!hasFinal&&!isTF){
+    if(hasPrelim&&!isTF){
       var nonScrBC=[];
       prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq)nonScrBC.push(x.team);});
       nonScrBC.forEach(function(t,idx){
