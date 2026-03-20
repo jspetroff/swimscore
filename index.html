@@ -1716,7 +1716,37 @@ function updLiveBreakdown(){
                  (isTF&&hasPrelim?d.prelim:[]);
     var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;});
     var finalPts=hasFinal?ptsFromRes(finalRes,pts):{};
-    evScores.push({ev:ev,psychPts:psychPts,prelimPts:prelimPts,finalPts:finalPts,
+    // Worst case: prelim done, final not yet — each team scores last place in their final tier
+    var wcPts={};
+    if(hasPrelim&&!hasFinal&&!isTF){
+      // Determine each finisher's final tier from prelim place
+      var nonScr=[];
+      prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq)nonScr.push(x.team);});
+      nonScr.forEach(function(t,idx){
+        // idx 0-7 = A final (last place = 7 = pts[7]), 8-15 = B final (last = 15 = pts[15]), 16-23 = C
+        var lastInFinal;
+        if(idx<8)lastInFinal=Math.min(7,pts.length-1);
+        else if(idx<16)lastInFinal=Math.min(15,pts.length-1);
+        else lastInFinal=Math.min(23,pts.length-1);
+        if(!wcPts[t])wcPts[t]=0;
+        wcPts[t]+=(pts[lastInFinal]||0);
+      });
+    }
+    // Best case: prelim done, final not yet — each team scores first place in their final tier
+    var bcPts={};
+    if(hasPrelim&&!hasFinal&&!isTF){
+      var nonScrBC=[];
+      prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq)nonScrBC.push(x.team);});
+      nonScrBC.forEach(function(t,idx){
+        var firstInFinal;
+        if(idx<8)firstInFinal=0;
+        else if(idx<16)firstInFinal=Math.min(8,pts.length-1);
+        else firstInFinal=Math.min(16,pts.length-1);
+        if(!bcPts[t])bcPts[t]=0;
+        bcPts[t]+=(pts[firstInFinal]||0);
+      });
+    }
+    evScores.push({ev:ev,psychPts:psychPts,prelimPts:prelimPts,finalPts:finalPts,wcPts:wcPts,bcPts:bcPts,
                    hasPrelim:hasPrelim,hasFinal:hasFinal,entered:hasPrelim||hasFinal,isTF:isTF});
   });
 
@@ -1724,7 +1754,7 @@ function updLiveBreakdown(){
   var hdr='<th rowspan="2" style="white-space:nowrap;border-right:1px solid var(--border);vertical-align:bottom">Event</th>';
   teams.forEach(function(t){
     var isHome=t===home;
-    hdr+='<th colspan="3" style="text-align:center;white-space:nowrap;border-right:1px solid var(--border);padding-bottom:.2rem'+(isHome?';color:var(--gold)':'')+'">'
+    hdr+='<th colspan="5" style="text-align:center;white-space:nowrap;border-right:1px solid var(--border);padding-bottom:.2rem'+(isHome?';color:var(--gold)':'')+'">'
         +esc(t)+(isHome?' &#127968;':'')+'</th>';
   });
   // Header row 2: PSY / PRE / FIN sub-labels
@@ -1732,6 +1762,8 @@ function updLiveBreakdown(){
   teams.forEach(function(){
     hdr+='<th style="font-size:.6rem;color:var(--text-dim);font-family:var(--fm);padding:.1rem .3rem;text-align:center">PSY</th>';
     hdr+='<th style="font-size:.6rem;color:var(--text-dim);font-family:var(--fm);padding:.1rem .3rem;text-align:center">PRE</th>';
+    hdr+='<th style="font-size:.6rem;color:var(--red);font-family:var(--fm);padding:.1rem .3rem;text-align:center" title="Worst case: last in each final">WC</th>';
+    hdr+='<th style="font-size:.6rem;color:var(--green);font-family:var(--fm);padding:.1rem .3rem;text-align:center" title="Best case: first in each final">BC</th>';
     hdr+='<th style="font-size:.6rem;color:var(--gold);font-family:var(--fm);padding:.1rem .3rem;text-align:center;border-right:1px solid var(--border)">FIN</th>';
   });
   document.getElementById('lebhdr').innerHTML=hdr;
@@ -1739,8 +1771,8 @@ function updLiveBreakdown(){
   // Data rows
   var bh='';
   var anyEntered=false;
-  var totPsy={},totPre={},totFin={};
-  teams.forEach(function(t){totPsy[t]=0;totPre[t]=0;totFin[t]=0;});
+  var totPsy={},totPre={},totWC={},totBC={},totFin={};
+  teams.forEach(function(t){totPsy[t]=0;totPre[t]=0;totWC[t]=0;totBC[t]=0;totFin[t]=0;});
 
   evScores.forEach(function(item){
     if(!item.entered)return;
@@ -1750,19 +1782,27 @@ function updLiveBreakdown(){
     teams.forEach(function(t){
       var psy=item.psychPts[t]||0;
       var pre=item.hasPrelim?(item.prelimPts[t]||0):null;
+      var wc=Object.keys(item.wcPts).length>0?(item.wcPts[t]||0):null;
+      var bc=Object.keys(item.bcPts).length>0?(item.bcPts[t]||0):null;
       var fin=item.hasFinal?(item.finalPts[t]||0):null;
       totPsy[t]+=psy;
       if(pre!==null)totPre[t]+=pre;
+      if(wc!==null)totWC[t]+=wc;
+      if(bc!==null)totBC[t]+=bc;
       if(fin!==null)totFin[t]+=fin;
-      function fmtCell(val,base,isFin){
+      function fmtCell(val,base,isFin,isWC,isBC){
         var s='font-size:.72rem;text-align:center;padding:.25rem .3rem;';
         if(val===null)return '<td style="'+s+'color:var(--text-dim)">—</td>';
         if(isFin){s+=val>base?'color:var(--green);font-weight:600':val<base?'color:var(--red)':'';s+=';border-right:1px solid var(--border)';}
+        if(isWC){s+='color:var(--red);font-style:italic';}
+        if(isBC){s+='color:var(--green);font-style:italic';}
         return '<td style="'+s+'">'+(val>0?val.toFixed(0):'<span style="color:var(--text-dim)">—</span>')+'</td>';
       }
-      bh+=fmtCell(psy,psy,false);
-      bh+=fmtCell(pre,psy,false);
-      bh+=fmtCell(fin,psy,true);
+      bh+=fmtCell(psy,psy,false,false,false);
+      bh+=fmtCell(pre,psy,false,false,false);
+      bh+=fmtCell(wc,psy,false,true,false);
+      bh+=fmtCell(bc,psy,false,false,true);
+      bh+=fmtCell(fin,psy,true,false,false);
     });
     bh+='</tr>';
   });
@@ -1776,6 +1816,9 @@ function updLiveBreakdown(){
       var col=fin>psy?'color:var(--green)':fin<psy?'color:var(--red)':'';
       bh+='<td style="font-size:.72rem;text-align:center">'+totPsy[t].toFixed(0)+'</td>';
       bh+='<td style="font-size:.72rem;text-align:center">'+totPre[t].toFixed(0)+'</td>';
+      var wcTot=totWC[t],bcTot=totBC[t];
+      bh+='<td style="font-size:.72rem;text-align:center;color:var(--red);font-style:italic">'+(wcTot>0?wcTot.toFixed(0):'—')+'</td>';
+      bh+='<td style="font-size:.72rem;text-align:center;color:var(--green);font-style:italic">'+(bcTot>0?bcTot.toFixed(0):'—')+'</td>';
       bh+='<td style="font-size:.72rem;text-align:center;'+col+';border-right:1px solid var(--border)">'+fin.toFixed(0)+'</td>';
     });
     bh+='</tr>';
