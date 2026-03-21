@@ -1619,8 +1619,9 @@ function updFinalsBreakdown(){
   evs.forEach(function(ev){
     var gi=S.events.indexOf(ev);
     var d=getLR(gi);
+    // Use final if entered, else fall back to prelim (shows projected finals lineup)
     var res=d.final.some(function(x){return x&&x.team;})?d.final:
-            (isTimedFinal(S.events[gi])?d.prelim:[]);
+            (d.prelim.some(function(x){return x&&x.team;})?d.prelim:[]);
     if(!res||!res.some(function(x){return x&&x.team;}))return;
     anyEntered=true;
     var teamCounts={};
@@ -1632,7 +1633,8 @@ function updFinalsBreakdown(){
       else if(rk<16)teamCounts[x.team].b++;
       else if(rk<24)teamCounts[x.team].c++;
     });
-    rows.push({ev:ev,tc:teamCounts});
+    var isPrelimOnly=!d.final.some(function(x){return x&&x.team;})&&!isTimedFinal(ev);
+    rows.push({ev:ev,tc:teamCounts,isPrelimOnly:isPrelimOnly});
   });
 
   // Build header: Event | TeamA (A/B/C) | TeamB (A/B/C) | ...
@@ -1656,7 +1658,7 @@ function updFinalsBreakdown(){
   var bh='';
   rows.forEach(function(row){
     bh+='<tr>';
-    bh+='<td style="font-size:.75rem;white-space:nowrap;font-family:var(--fm)">E'+row.ev.num+' '+esc(row.ev.name)+'</td>';
+    bh+='<td style="font-size:.75rem;white-space:nowrap;font-family:var(--fm);'+(row.isPrelimOnly?'color:var(--text-dim)':'')+'">'+'E'+row.ev.num+' '+esc(row.ev.name)+(row.isPrelimOnly?' <span style="font-size:.6rem;color:var(--text-dim)">(prelim)</span>':'')+'</td>';
     teams.forEach(function(t){
       var f=row.tc[t]||{a:0,b:0,c:0};
       bh+='<td style="font-family:var(--fm);color:var(--gold);border-left:1px solid var(--border)">'+(f.a||'—')+'</td>';
