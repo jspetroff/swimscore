@@ -1561,8 +1561,11 @@ function liveScores(){
     if(!ev||!ev.active)return;
     var pts=mpts(ev.isRelay);
     var d=S.liveResults[gi];
-    // Always score from final results only (or flat array for backward compat)
-    var res=Array.isArray(d)?d:(d.final||[]);
+    // Score from final; for timed finals fall back to prelim if final is empty
+    var isTF2=isTimedFinal(ev);
+    var finalArr=Array.isArray(d)?d:(d&&d.final||[]);
+    var prelimArr=d&&!Array.isArray(d)?(d.prelim||[]):[];
+    var res=(finalArr.some(function(x){return x&&x.team;}))?finalArr:(isTF2?prelimArr:finalArr);
     // Build list of non-scratched finishers
     var finishers=[];
     res.forEach(function(x,rk){
