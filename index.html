@@ -459,7 +459,7 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
           </div>
         </div>
         <div class="card">
-          <div class="ct">Clinch Status</div>
+          <div class="ct" style="display:flex;align-items:center;justify-content:space-between">Clinch Status<button class="btn bsm" onclick="showMeetReport()" style="font-size:.65rem">&#9733; Meet Report</button></div>
           <div id="clinch" class="cb cn">Loading...</div>
           <div style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem;margin-bottom:.875rem">Points remaining for 1st place: <strong id="avail">—</strong></div>
           <div>
@@ -509,6 +509,17 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
             <tbody id="lfinbd"></tbody>
           </table>
         </div>
+      </div>
+      <div id="lev"></div>
+      <div class="card" id="meetReportCard" style="display:none">
+        <div class="ct" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Meet Report — Final vs Psych</span>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn bsm" onclick="downloadMeetReport()">&#8681; Download CSV</button>
+            <button class="btn bsm" onclick="document.getElementById('meetReportCard').style.display='none'">&#x2715;</button>
+          </div>
+        </div>
+        <div id="meetReportBody"></div>
       </div>
       <div id="lev"></div>
     </div>
@@ -1829,6 +1840,191 @@ function updLiveBreakdown(){
     bh+='</tr>';
   }
   document.getElementById('lebbd').innerHTML=bh;
+}
+
+
+// ── MEET REPORT ───────────────────────────────────────────────────────────
+function buildMeetReportData(){
+  var home=S.homeTeam;
+  var sc=liveScores();
+
+  // Top 5 by score + Emory (always included)
+  var ranked=Object.keys(sc).sort(function(a,b){return sc[b]-sc[a];});
+  var top5=ranked.slice(0,5);
+  var teams=top5.indexOf(home)<0?[home].concat(top5.slice(0,4)):top5;
+  // ensure Emory first
+  teams=teams.filter(function(t){return t!==home;});
+  teams=[home].concat(teams);
+
+  var allEvs=actEvs('full').filter(function(ev){return !ev.isRelay;});
+  var pts=null; // will be set per event
+
+  var rows=[];
+  allEvs.forEach(function(ev){
+    var gi=S.events.indexOf(ev);
+    var d=getLR(gi);
+    var isTF=isTimedFinal(ev);
+    var finalRes=Array.isArray(d)?d:((d.final&&d.final.some(function(x){return x&&x.team;}))?d.final:(isTF?(d.prelim||[]):(d.final||[])));
+    var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;});
+    if(!hasFinal)return;
+
+    var evPts=mpts(ev.isRelay);
+    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+
+    // Build actual place map (team -> actual place, 1-indexed, non-scratched)
+    var actualPlaceMap={};
+    var actualPtsMap={};
+    var scoredRk=0;
+    finalRes.forEach(function(x,rk){
+      if(!x||x.scratch||x.dq||!x.team)return;
+      actualPlaceMap[x.team]=rk+1;
+      actualPtsMap[x.team]=(evPts[scoredRk]||0);
+      scoredRk++;
+    });
+
+    // Build psych place map (team -> seed place)
+    var psychPlaceMap={};
+    var psychPtsMap={};
+    entries.forEach(function(en,idx){
+      if(!psychPlaceMap[en.team]){
+        psychPlaceMap[en.team]=en.seedPlace;
+        psychPtsMap[en.team]=evPts[idx]||0;
+      }
+    });
+
+    var row={evNum:ev.num,evName:ev.gender+' '+ev.name,teams:{}};
+    teams.forEach(function(t){
+      var ap=actualPlaceMap[t]||null;
+      var sp=psychPlaceMap[t]||null;
+      var apts=actualPtsMap[t]||0;
+      var spts=psychPtsMap[t]||0;
+      row.teams[t]={actualPlace:ap,psychPlace:sp,actualPts:apts,psychPts:spts,ptsDelta:apts-spts};
+    });
+    rows.push(row);
+  });
+
+  // Totals
+  var totals={};
+  teams.forEach(function(t){
+    totals[t]={actualPts:sc[t]||0,psychPts:0,ptsDelta:0,finalRank:ranked.indexOf(t)+1};
+    rows.forEach(function(r){if(r.teams[t])totals[t].psychPts+=r.teams[t].psychPts;});
+    totals[t].ptsDelta=totals[t].actualPts-totals[t].psychPts;
+  });
+
+  return{teams:teams,rows:rows,totals:totals,home:home};
+}
+
+function showMeetReport(){
+  var data=buildMeetReportData();
+  var teams=data.teams,rows=data.rows,totals=data.totals,home=data.home;
+
+  if(!rows.length){
+    document.getElementById('meetReportBody').innerHTML='<div style="color:var(--text-dim);font-size:.82rem;padding:.5rem 0">No final results entered yet.</div>';
+    document.getElementById('meetReportCard').style.display='block';
+    return;
+  }
+
+  // Header
+  var hdr='<th style="white-space:nowrap;border-right:1px solid var(--border)">Event</th>';
+  teams.forEach(function(t){
+    var isHome=t===home;
+    hdr+='<th colspan="3" style="text-align:center;border-right:1px solid var(--border)'+(isHome?';color:var(--gold)':'')+'">'
+        +esc(t)+(isHome?' &#127968;':'')+'</th>';
+  });
+  hdr+='</tr><tr><th style="border-right:1px solid var(--border)"></th>';
+  teams.forEach(function(){
+    hdr+='<th style="font-size:.6rem;color:var(--text-dim);font-family:var(--fm);text-align:center;padding:.1rem .3rem">Seed</th>';
+    hdr+='<th style="font-size:.6rem;color:var(--text-dim);font-family:var(--fm);text-align:center;padding:.1rem .3rem">Fin</th>';
+    hdr+='<th style="font-size:.6rem;color:var(--gold);font-family:var(--fm);text-align:center;padding:.1rem .3rem;border-right:1px solid var(--border)">&#916;pts</th>';
+  });
+
+  // Rows
+  var bh='';
+  rows.forEach(function(row){
+    bh+='<tr>';
+    bh+='<td style="font-size:.72rem;white-space:nowrap;font-family:var(--fm);border-right:1px solid var(--border)">E'+row.evNum+' '+esc(row.evName)+'</td>';
+    teams.forEach(function(t){
+      var d=row.teams[t];
+      var seedStr=d.psychPlace?d.psychPlace+'<span style="font-size:.65rem;color:var(--text-dim)">('+d.psychPts+')</span>':'—';
+      var finStr=d.actualPlace?d.actualPlace+'<span style="font-size:.65rem;color:var(--text-dim)">('+d.actualPts+')</span>':'—';
+      var delta=d.ptsDelta;
+      var deltaStr=delta>0?'<span style="color:var(--green)">+'+delta.toFixed(1)+'</span>':
+                   delta<0?'<span style="color:var(--red)">'+delta.toFixed(1)+'</span>':
+                   '<span style="color:var(--text-dim)">0</span>';
+      bh+='<td style="font-size:.72rem;text-align:center;padding:.25rem .3rem">'+seedStr+'</td>';
+      bh+='<td style="font-size:.72rem;text-align:center;padding:.25rem .3rem">'+finStr+'</td>';
+      bh+='<td style="font-size:.72rem;text-align:center;padding:.25rem .3rem;border-right:1px solid var(--border)">'+deltaStr+'</td>';
+    });
+    bh+='</tr>';
+  });
+
+  // Totals row
+  bh+='<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--bg3)">';
+  bh+='<td style="font-size:.72rem;font-family:var(--fm);border-right:1px solid var(--border)">TOTAL</td>';
+  teams.forEach(function(t){
+    var tot=totals[t];
+    var delta=tot.ptsDelta;
+    var deltaStr=delta>0?'<span style="color:var(--green)">+'+delta.toFixed(1)+'</span>':
+                 delta<0?'<span style="color:var(--red)">'+delta.toFixed(1)+'</span>':
+                 '<span style="color:var(--text-dim)">0</span>';
+    bh+='<td style="font-size:.72rem;text-align:center">'+tot.psychPts.toFixed(0)+'</td>';
+    bh+='<td style="font-size:.72rem;text-align:center">'+tot.actualPts.toFixed(1)+'</td>';
+    bh+='<td style="font-size:.72rem;text-align:center;border-right:1px solid var(--border)">'+deltaStr+'</td>';
+  });
+  bh+='</tr>';
+
+  var html='<div style="overflow-x:auto;max-height:500px;overflow-y:auto">'
+    +'<table class="lb" style="border-collapse:collapse;width:100%">'
+    +'<thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr>'+hdr+'</tr></thead>'
+    +'<tbody>'+bh+'</tbody>'
+    +'</table></div>';
+
+  document.getElementById('meetReportBody').innerHTML=html;
+  document.getElementById('meetReportCard').style.display='block';
+  document.getElementById('meetReportCard').scrollIntoView({behavior:'smooth'});
+}
+
+function downloadMeetReport(){
+  var data=buildMeetReportData();
+  var teams=data.teams,rows=data.rows,totals=data.totals;
+
+  // Header row
+  var csvRows=[['Event'].concat(teams.map(function(t){
+    return [t+' Seed Pl',t+' Fin Pl',t+' Seed Pts',t+' Fin Pts',t+' Δpts'];
+  })).reduce(function(a,b){return a.concat(b);},[])];;
+
+  rows.forEach(function(row){
+    var r=['"E'+row.evNum+' '+row.evName+'"'];
+    teams.forEach(function(t){
+      var d=row.teams[t];
+      r.push(d.psychPlace||'');
+      r.push(d.actualPlace||'');
+      r.push(d.psychPts||0);
+      r.push(d.actualPts||0);
+      r.push(d.ptsDelta.toFixed(1));
+    });
+    csvRows.push(r);
+  });
+
+  // Totals
+  var tot=['TOTAL'];
+  teams.forEach(function(t){
+    var d=totals[t];
+    tot.push('');tot.push('Rank '+d.finalRank);
+    tot.push(d.psychPts.toFixed(0));
+    tot.push(d.actualPts.toFixed(1));
+    tot.push(d.ptsDelta.toFixed(1));
+  });
+  csvRows.push(tot);
+
+  var csv=csvRows.map(function(r){return r.join(',');}).join('
+');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=(S.meetName||'Meet')+'_Report.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function updLB(){
