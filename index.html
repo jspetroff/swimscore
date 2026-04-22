@@ -734,8 +734,18 @@ function subscribeMeta(){
     setSyncStatus('ok','Synced');
     if(snap.exists()){
       var data=snap.data();
-      if(data.meets){
+      if(data.meets&&data.meets.length){
+        var hadLocalMeta=lsMeta().length>0;
         saveLsMeta(data.meets);
+        // If we booted with no local data, load the most recent Firebase meet now
+        if(!hadLocalMeta){
+          var lastId=null;
+          try{lastId=localStorage.getItem('swimscore_active_id');}catch(e){}
+          var target=lastId&&data.meets.find(function(x){return x.id===lastId;})
+            ?lastId:data.meets[data.meets.length-1].id;
+          loadMeet(target);
+          applyLoadedState();
+        }
         // Re-render meet list if modal is open
         if(document.getElementById('meetModal').classList.contains('open')){
           renderMeetList();
