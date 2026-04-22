@@ -1102,7 +1102,7 @@ function actEvs(df){
 function evGrp(name,isRelay){
   if(isRelay)return'relays';
   var n=name.toLowerCase();
-  if(/im|individual medley|400 medley/.test(n))return'im';
+  if(/im|individual medley|400 medley/.test(n))return'im';
   if(/backstroke|back/.test(n))return'back';
   if(/breaststroke|breast/.test(n))return'breast';
   if(/butterfly|fly/.test(n))return'fly';
@@ -2081,8 +2081,7 @@ function downloadMeetReport(){
   });
   csvRows.push(tot);
 
-  var csv=csvRows.map(function(r){return r.join(',');}).join('
-');
+  var csv=csvRows.map(function(r){return r.join(',');}).join('\n');
   var blob=new Blob([csv],{type:'text/csv'});
   var a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
