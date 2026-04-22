@@ -1467,7 +1467,14 @@ function renderEventBody(gi){
     var dq2=r.dq?'checked':'';
     var tie2=r.tie?'checked':'';
     var opts='<option value="">—</option>';
-    S.activeTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
+    // In final mode with prelim results, only show teams that made the final (from prelim)
+    var dropdownTeams=S.activeTeams;
+    if(mode==='final'&&hasPrelim&&prelimRes.length){
+      var prelimTeams=[];
+      prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq&&prelimTeams.indexOf(x.team)<0)prelimTeams.push(x.team);});
+      if(prelimTeams.length)dropdownTeams=prelimTeams;
+    }
+    dropdownTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
     var refCell='';
     if(mode==='final'&&hasPrelim){
       var pts_arr=mpts(ev.isRelay);
