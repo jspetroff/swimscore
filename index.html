@@ -2026,8 +2026,8 @@ function showMeetReport(){
     bh+='<td style="font-size:.72rem;white-space:nowrap;font-family:var(--fm);border-right:1px solid var(--border)">E'+row.evNum+' '+esc(row.evName)+'</td>';
     teams.forEach(function(t){
       var d=row.teams[t];
-      var seedStr=d.psychPlace?d.psychPlace+'<span style="font-size:.65rem;color:var(--text-dim)">('+d.psychPts+')</span>':'—';
-      var finStr=d.actualPlace?d.actualPlace+'<span style="font-size:.65rem;color:var(--text-dim)">('+d.actualPts+')</span>':'—';
+      var seedStr=d.psychPts>0?d.psychPts.toFixed(1)+'<span style="font-size:.65rem;color:var(--text-dim)"> (#'+d.psychPlace+')</span>':'—';
+      var finStr=d.actualPts>0?d.actualPts.toFixed(1)+'<span style="font-size:.65rem;color:var(--text-dim)"> (#'+d.actualPlace+')</span>':'—';
       var delta=d.ptsDelta;
       var deltaStr=delta>0?'<span style="color:var(--green)">+'+delta.toFixed(1)+'</span>':
                    delta<0?'<span style="color:var(--red)">'+delta.toFixed(1)+'</span>':
