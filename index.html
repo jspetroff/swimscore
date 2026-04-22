@@ -729,7 +729,9 @@ function subscribeMeet(id){
 function subscribeMeta(){
   if(_unsubMeta){_unsubMeta();_unsubMeta=null;}
   if(!window._fbReady)return;
+  setSyncStatus('wait','Connecting...');
   _unsubMeta=window._fsOnSnapshot(fsMetaDoc(),function(snap){
+    setSyncStatus('ok','Synced');
     if(snap.exists()){
       var data=snap.data();
       if(data.meets){
@@ -740,7 +742,10 @@ function subscribeMeta(){
         }
       }
     }
-  },function(e){console.warn('Meta listener error',e);});
+  },function(e){
+    console.warn('Meta listener error',e);
+    setSyncStatus('err','Sync error: '+e.code);
+  });
 }
 
 // ── Load a meet into S ────────────────────────────────────────────────────
@@ -2379,7 +2384,6 @@ function init(){
   }
 
   // Firebase is already ready when init() is called (gated by onAuthStateChanged)
-  setSyncStatus('ok','Synced');
   subscribeMeta();
   if(ACTIVE_ID)subscribeMeet(ACTIVE_ID);
 }
