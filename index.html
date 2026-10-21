@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SwimScore</title>
 <!-- Firebase -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
@@ -499,6 +500,15 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
   <div id="tab-live" class="tp">
     <div id="le" class="es"><div class="ico">&#127944;</div><div>Load a psych sheet in Setup to begin live scoring.</div></div>
     <div id="lc" style="display:none">
+      <div class="card" style="margin-bottom:1rem">
+        <div class="ct">Upload Results</div>
+        <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+          <button class="btn bsm bprimary" onclick="document.getElementById('rpFile').click()">&#8679; Upload results PDF</button>
+          <input type="file" id="rpFile" accept=".pdf" style="display:none" onchange="rpUpload(this.files[0]).finally(()=>{this.value=''})">
+          <span style="font-size:.72rem;color:var(--text-dim)">Meet Manager prelims or finals results &mdash; fills each event's places for you.</span>
+        </div>
+        <div id="rpStatus"></div>
+      </div>
       <div class="cgrid">
         <div class="card">
           <div class="ct">Leaderboard</div>
@@ -2362,6 +2372,179 @@ function createMeetWithPreload(){
   closeMeetMgr();
   showSt('Loaded: '+S.events.length+' events, '+S.teams.length+' teams (2025 NCAA D3 Women)','ok');
 }
+// ── RESULTS PDF UPLOAD (Meet Manager results → live places) ──────────────
+// Reads a Meet Manager results PDF (prelims or finals, one or two columns) and fills each event's
+// prelim or final places with teams in finishing order — the same as picking them from the dropdowns.
+// Exhibition (x) swims and DQs are left out; tied places (*) get the tie box.
+async function rpPdfReady(){
+  if(!window.pdfjsLib)throw new Error('PDF reader did not load — check your internet connection and reload.');
+  if(window._rpWorkerSet)return;
+  var src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  try{var txt=await (await fetch(src)).text();pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([txt],{type:'text/javascript'}));}
+  catch(e){pdfjsLib.GlobalWorkerOptions.workerSrc=src;}
+  window._rpWorkerSet=true;
+}
+async function rpReadPages(bytes){
+  await rpPdfReady();
+  var doc=await pdfjsLib.getDocument({data:bytes}).promise,pages=[];
+  for(var p=1;p<=doc.numPages;p++){
+    var tc=await (await doc.getPage(p)).getTextContent();
+    pages.push(tc.items.map(function(i){return{str:i.str,x:i.transform[4],y:i.transform[5]};}));
+  }
+  return pages;
+}
+var RP_TIME=/^x?((?:\d+:)?\d+\.\d\d)[A-Za-z*]?$/;
+var RP_YEAR=/^(FR|SO|JR|SR|GS|GR|5Y|6Y|5TH)$/i;
+// → {meet, isResults, isPsych, events:[{num, gender, name, mode, rows:[{place, tie, team, exh}]}]}
+function rpParseResults(pages){
+  var out={meet:'',isResults:false,isPsych:false,events:[]},cur=null,hdrMode=null;
+  pages.forEach(function(items){
+    items=items.filter(function(i){return i.str&&i.str.trim();}).map(function(i){return{str:i.str.trim(),x:i.x,y:i.y};});
+    if(items.some(function(i){return /Psych Sheet/i.test(i.str);}))out.isPsych=true;
+    var mmIt=items.find(function(i){return /MEET MANAGER/i.test(i.str);});
+    var resIt=items.find(function(i){return /^Results\b/.test(i.str);});
+    if(resIt)out.isResults=true;
+    var title=mmIt&&items.filter(function(i){return i.y<mmIt.y-2&&!/^Results\b/.test(i.str);}).sort(function(a,b){return b.y-a.y;})[0];
+    if(!out.meet&&title)out.meet=title.str.replace(/\s+-\s+\d{1,2}\/\d{1,2}\/\d{4}.*$/,'').trim();
+    var topY=resIt?resIt.y-2:title?title.y-2:Infinity;
+    var body=items.filter(function(i){return i.y<topY;});
+    var heads=body.filter(function(i){return /^\(?Event\s+\d+/.test(i.str);});
+    var xs=heads.map(function(i){return Math.round(i.x);}).sort(function(a,b){return a-b;});
+    var cut=xs.length&&xs[xs.length-1]-xs[0]>150?xs[xs.length-1]-6:Infinity;   // right column starts at its event headings
+    [body.filter(function(i){return i.x<cut;}),body.filter(function(i){return i.x>=cut;})].forEach(function(ci){
+      var rows=[];
+      ci.forEach(function(it){var r=rows.find(function(r){return Math.abs(r.y-it.y)<2.5;});if(!r){r={y:it.y,items:[]};rows.push(r);}r.items.push(it);});
+      rows.sort(function(a,b){return b.y-a.y;});
+      rows.forEach(function(r){
+        var t=r.items.sort(function(a,b){return a.x-b.x;}).map(function(i){return i.str;});
+        var line=t.join(' ');
+        var h=line.match(/^(?:[A-Z] - Final\s*\.*\s*)?\(?Event\s+(\d+)\s+(Women|Men|Girls|Boys|Mixed)\s+(.+?)\)?$/i);
+        if(h){
+          var num=+h[1],g=/^(Women|Girls)/i.test(h[2])?'Women':/^(Men|Boys)/i.test(h[2])?'Men':'Mixed';
+          if(cur&&cur.num===num&&cur.gender===g)return;              // continuation heading
+          cur={num:num,gender:g,name:h[3].replace(/\s*-?\s*Time Trial\s*$/i,'').trim(),mode:null,rows:[]};
+          out.events.push(cur);hdrMode=null;return;
+        }
+        if(!cur)return;
+        // A finals page can end an event with a "Preliminaries" list (swimmers who didn't swim the final,
+        // shown with their prelim place) — those aren't finals placings.
+        if(/^Preliminaries$/i.test(line)){if(cur.mode==='final')cur.tail=true;return;}
+        if(cur.tail)return;
+        // Column header tells prelim vs final: the last "<X> Time/Score" column is this session's result
+        var cols=line.match(/\b(Seed|Prelim|Finals)\s+(Time|Score)\b/g);
+        if(cols&&/\b(Name|Team)\b/.test(line)){hdrMode=/^Finals/.test(cols[cols.length-1])?'final':/^Prelim/.test(cols[cols.length-1])?'prelim':null;if(!cur.mode)cur.mode=hdrMode;return;}
+        var pm=t[0]&&t[0].match(/^(\*)?(\d+)$/),dq=t[0]==='---';
+        if(!pm&&!dq)return;
+        var res=t.filter(function(x){return RP_TIME.test(x);});
+        var last=res.length?res[res.length-1]:'';
+        if(dq||!last)return;                                         // DQ / NS / scratch: no place
+        var team;
+        if(/Relay/i.test(cur.name)){team=t[1];}                      // "1 Emory University A 1:33.08 1:32.77"
+        else{
+          if(!/,/.test(t[1]||''))return;                             // "<place> Last, First YR Team ..."
+          var k=2;if(t[k]&&RP_YEAR.test(t[k]))k++;
+          team=t[k];
+        }
+        if(!team||RP_TIME.test(team))return;
+        cur.rows.push({place:+pm[2],tie:!!pm[1],team:team,exh:/^x/.test(last)});
+      });
+    });
+  });
+  out.events=out.events.filter(function(e){return e.rows.length;});
+  return out;
+}
+
+// PDF event → SwimScore event index
+function rpNorm(s){return String(s||'').toLowerCase().replace(/\byard\b|\byd\b/g,'').replace(/individual medley/g,'im').replace(/\s+/g,' ').trim();}
+function rpMatchEvent(pe){
+  var dive=pe.name.match(/^(\d)\s*(?:mtr|meter|m)\b.*Diving/i);
+  if(dive){
+    var bn=dive[1]==='1'?'1m Springboard':'3m Springboard';
+    return S.events.findIndex(function(ev){return ev.isDiving&&ev.gender===pe.gender&&ev.name===bn;});
+  }
+  var gi=S.events.findIndex(function(ev){return ev.num===pe.num&&ev.gender===pe.gender&&rpNorm(ev.name)===rpNorm(pe.name);});
+  if(gi>=0)return gi;
+  return S.events.findIndex(function(ev){return !ev.isDiving&&ev.gender===pe.gender&&rpNorm(ev.name)===rpNorm(pe.name);});   // numbering differs
+}
+// PDF team name → SwimScore team
+function rpTeamKey(s){return String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+function rpMatchTeam(name){
+  var al=(S.teamAliases||{})[name];if(al!==undefined)return al;
+  if(S.teams.indexOf(name)>=0)return name;
+  var k=rpTeamKey(name),hit=S.teams.filter(function(t){return rpTeamKey(t)===k;});
+  if(hit.length===1)return hit[0];
+  return null;
+}
+
+var _rp=null;
+async function rpUpload(file){
+  if(!file)return;
+  var st=document.getElementById('rpStatus');
+  if(_isViewOnly){st.innerHTML='<div class="st err">This is a view-only link — results can only be uploaded on the scoring device.</div>';return;}
+  st.innerHTML='<div class="st ok">Reading '+esc(file.name)+'…</div>';
+  try{
+    var bytes=new Uint8Array(await file.arrayBuffer());
+    var res=rpParseResults(await rpReadPages(bytes));
+    if(res.isPsych)throw new Error('This is a psych sheet — load it in Setup. Upload results PDFs here.');
+    if(!res.isResults||!res.events.length)throw new Error('No Meet Manager results found in this PDF.');
+    var evs=[],noEvent=[],teamsMiss={};
+    res.events.forEach(function(pe){
+      var gi=rpMatchEvent(pe);
+      if(gi<0){noEvent.push(pe.gender+' '+pe.name);return;}
+      var mode=isTimedFinal(S.events[gi])||S.events[gi].isRelay?'final':(pe.mode||'final');
+      evs.push({pe:pe,gi:gi,mode:mode});
+      pe.rows.forEach(function(r){if(!r.exh&&rpMatchTeam(r.team)===null)teamsMiss[r.team]=1;});
+    });
+    _rp={file:file.name,meet:res.meet,evs:evs,noEvent:noEvent,miss:Object.keys(teamsMiss)};
+    rpRenderPreview();
+  }catch(e){st.innerHTML='<div class="st err">'+esc(e.message)+'</div>';_rp=null;}
+}
+
+function rpRenderPreview(){
+  var st=document.getElementById('rpStatus');if(!_rp)return;
+  var h='<div style="font-size:.78rem;margin:.5rem 0">'+esc(_rp.file)+(_rp.meet?' · '+esc(_rp.meet):'')+' — <b>'+_rp.evs.length+' event'+(_rp.evs.length===1?'':'s')+'</b>: '+
+    _rp.evs.map(function(e){var ev=S.events[e.gi];return 'E'+ev.num+' '+esc(ev.gender[0]+' '+ev.name)+' <span style="color:var(--text-dim)">('+e.mode+')</span>';}).join(', ')+'</div>';
+  if(_rp.noEvent.length)h+='<div class="st err" style="margin-bottom:.5rem">Not in this meet\'s events, skipped: '+_rp.noEvent.map(esc).join(', ')+'</div>';
+  if(_rp.miss.length){
+    h+='<div style="font-size:.75rem;color:var(--gold);margin-bottom:.35rem">Match these team names to the psych sheet:</div>';
+    _rp.miss.forEach(function(n,i){
+      h+='<div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.3rem;font-size:.78rem"><span style="flex:1">'+esc(n)+'</span><select id="rpMap'+i+'"><option value="">— not in this meet (leave out) —</option>'+
+        S.teams.map(function(t){return '<option>'+esc(t)+'</option>';}).join('')+'</select></div>';
+    });
+  }
+  var filled=_rp.evs.filter(function(e){var d=getLR(e.gi);return (d[e.mode]||[]).some(function(x){return x&&x.team;});});
+  if(filled.length)h+='<div style="font-size:.72rem;color:var(--gold);margin:.35rem 0">'+filled.length+' of these already have '+(filled.length===1?'a result':'results')+' entered — applying replaces them.</div>';
+  h+='<div style="display:flex;gap:.5rem;margin-top:.5rem"><button class="btn bsm bprimary" onclick="rpApply()">&#9654; Fill places</button><button class="btn bsm" onclick="rpCancel()">Cancel</button></div>';
+  st.innerHTML=h;
+}
+function rpCancel(){_rp=null;document.getElementById('rpStatus').innerHTML='';}
+
+function rpApply(){
+  if(!_rp)return;
+  S.teamAliases=S.teamAliases||{};
+  _rp.miss.forEach(function(n,i){var el=document.getElementById('rpMap'+i);S.teamAliases[n]=el?el.value:'';});
+  if(!S.liveMode)S.liveMode={};
+  var placed=0;
+  _rp.evs.forEach(function(e){
+    var ev=S.events[e.gi],pts=mpts(ev.isRelay),cap=Math.max(pts.length,24),arr=[],prev=null;
+    e.pe.rows.slice().sort(function(a,b){return a.place-b.place;}).forEach(function(r){
+      if(r.exh)return;
+      var team=rpMatchTeam(r.team);if(!team)return;               // not in this meet / left out
+      if(arr.length>=cap)return;
+      arr.push({team:team,scratch:false,dq:false,tie:!!(prev&&prev.place===r.place)});
+      prev=r;
+    });
+    var d=S.liveResults[e.gi];
+    if(!d||Array.isArray(d))S.liveResults[e.gi]={prelim:Array.isArray(d)?d:[],final:[]};
+    S.liveResults[e.gi][e.mode]=arr;
+    if(!isTimedFinal(ev))S.liveMode[e.gi]=e.mode;
+    placed+=arr.length;
+  });
+  var n=_rp.evs.length,file=_rp.file;_rp=null;
+  save();renderLiveEvs();updLB();updClinch();
+  document.getElementById('rpStatus').innerHTML='<div class="st ok">&#10003; '+esc(file)+': filled '+placed+' places across '+n+' event'+(n===1?'':'s')+'.</div>';
+}
+
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function showSt(msg,type){var el=document.getElementById('ps');el.textContent=msg;el.className='st '+type;}
 
