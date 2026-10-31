@@ -2398,6 +2398,12 @@ var RP_YEAR=/^(FR|SO|JR|SR|GS|GR|5Y|6Y|5TH)$/i;
 // → {meet, isResults, isPsych, events:[{num, gender, name, mode, rows:[{place, tie, team, exh}]}]}
 function rpParseResults(pages){
   var out={meet:'',isResults:false,isPsych:false,events:[]},cur=null,hdrMode=null;
+  // Two-column PDFs: the right column starts at its event headings. Worked out once for the whole PDF —
+  // a page can have headings in only one column.
+  var headX=[];
+  pages.forEach(function(p){p.forEach(function(i){if(/^\(?Event\s+\d+/.test((i.str||'').trim())&&headX.indexOf(Math.round(i.x))<0)headX.push(Math.round(i.x));});});
+  headX.sort(function(a,b){return a-b;});
+  var docCut=headX.length&&headX[headX.length-1]-headX[0]>150?headX[headX.length-1]-6:Infinity;
   pages.forEach(function(items){
     items=items.filter(function(i){return i.str&&i.str.trim();}).map(function(i){return{str:i.str.trim(),x:i.x,y:i.y};});
     if(items.some(function(i){return /Psych Sheet/i.test(i.str);}))out.isPsych=true;
@@ -2408,9 +2414,7 @@ function rpParseResults(pages){
     if(!out.meet&&title)out.meet=title.str.replace(/\s+-\s+\d{1,2}\/\d{1,2}\/\d{4}.*$/,'').trim();
     var topY=resIt?resIt.y-2:title?title.y-2:Infinity;
     var body=items.filter(function(i){return i.y<topY;});
-    var heads=body.filter(function(i){return /^\(?Event\s+\d+/.test(i.str);});
-    var xs=heads.map(function(i){return Math.round(i.x);}).sort(function(a,b){return a-b;});
-    var cut=xs.length&&xs[xs.length-1]-xs[0]>150?xs[xs.length-1]-6:Infinity;   // right column starts at its event headings
+    var cut=docCut;
     [body.filter(function(i){return i.x<cut;}),body.filter(function(i){return i.x>=cut;})].forEach(function(ci){
       var rows=[];
       ci.forEach(function(it){var r=rows.find(function(r){return Math.abs(r.y-it.y)<2.5;});if(!r){r={y:it.y,items:[]};rows.push(r);}r.items.push(it);});
@@ -2442,7 +2446,7 @@ function rpParseResults(pages){
         if(/Relay/i.test(cur.name)){team=t[1];}                      // "1 Emory University A 1:33.08 1:32.77"
         else{
           if(!/,/.test(t[1]||''))return;                             // "<place> Last, First YR Team ..."
-          var k=2;if(t[k]&&RP_YEAR.test(t[k]))k++;
+          var k=2;if(t[k]&&(RP_YEAR.test(t[k])||/^\d{1,2}$/.test(t[k])))k++;   // class year or age
           team=t[k];
         }
         if(!team||RP_TIME.test(team))return;
