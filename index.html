@@ -376,7 +376,7 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
         <input type="file" id="pfu" accept=".pdf">
         <div class="ui">&#128196;</div>
         <div class="ul">Click to Upload Psych Sheet PDF</div>
-        <div class="us">NCAA D3 psych sheet &mdash; or paste text below</div>
+        <div class="us">Meet Manager psych sheet (NCAA D3 or UAA) &mdash; or paste text below</div>
       </div>
       <div style="margin-top:1rem">
         <label style="display:block;margin-bottom:.375rem;font-size:.75rem;color:var(--text-dim);font-family:var(--fm);letter-spacing:.06em">OR PASTE TEXT &mdash; Open PDF in browser &rarr; Select All &rarr; Copy &rarr; Paste here:</label>
@@ -943,41 +943,55 @@ function setLiveSess(s,el){
 }
 
 // ── PDF UPLOAD ────────────────────────────────────────────────────────────
-function handlePDF(file){
+// Reads the PDF in the browser (same pdf.js reader as the results upload) and rebuilds its text lines
+// from item positions, so page headers never run into the last swimmer on a page.
+async function psPdfLines(bytes){
+  await rpPdfReady();
+  var doc=await pdfjsLib.getDocument({data:bytes}).promise,pages=[];
+  for(var p=1;p<=doc.numPages;p++){
+    var tc=await (await doc.getPage(p)).getTextContent();
+    pages.push(tc.items.filter(function(i){return i.str&&i.str.trim();})
+      .map(function(i){return{str:i.str,x:i.transform[4],y:i.transform[5],w:i.width||0};}));
+  }
+  // Two-column psych sheets: right column starts at its event headings (worked out once for the whole PDF)
+  var headX=[];
+  pages.forEach(function(p){p.forEach(function(i){if(/^\s*(\(?Event\s+\d+|#\d+(\s|$))/.test(i.str)&&headX.indexOf(Math.round(i.x))<0)headX.push(Math.round(i.x));});});
+  headX.sort(function(a,b){return a-b;});
+  // Column starts = clusters of heading x positions at least 150pt apart (1, 2 or 3 columns)
+  var starts=[];
+  headX.forEach(function(x){if(!starts.length||x-starts[starts.length-1]>150)starts.push(x);});
+  var cuts=starts.slice(1).map(function(x){return x-6;});
+  function colOf(x){var c=0;while(c<cuts.length&&x>=cuts[c])c++;return c;}
+  var lines=[];
+  pages.forEach(function(items){
+    var cols=[];for(var c=0;c<=cuts.length;c++)cols.push([]);
+    items.forEach(function(i){cols[colOf(i.x)].push(i);});
+    cols.forEach(function(col){
+      var rows=[];
+      col.forEach(function(it){var r=rows.find(function(r){return Math.abs(r.y-it.y)<2.5;});if(!r){r={y:it.y,items:[]};rows.push(r);}r.items.push(it);});
+      rows.sort(function(a,b){return b.y-a.y;});
+      rows.forEach(function(r){
+        var its=r.items.sort(function(a,b){return a.x-b.x;}),s='';
+        its.forEach(function(it,k){
+          if(k>0){var pv=its[k-1];if(it.x-(pv.x+pv.w)>0.8&&!/\s$/.test(s))s+=' ';}
+          s+=it.str;
+        });
+        lines.push(s.trim());
+      });
+    });
+  });
+  return lines.join('\n');
+}
+
+async function handlePDF(file){
   if(!file){showSt('No file selected.','err');return;}
   showSt('Reading PDF...','ok');
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var bytes=new Uint8Array(e.target.result);
-    var binary='';
-    for(var i=0;i<bytes.length;i++){binary+=String.fromCharCode(bytes[i]);}
-    var b64=btoa(binary);
-    fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:8000,
-        messages:[{
-          role:'user',
-          content:[
-            {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
-            {type:'text',text:'Extract all text from this NCAA swimming psych sheet exactly as it appears, preserving line structure. Output only the raw text with no commentary or formatting.'}
-          ]
-        }]
-      })
-    })
-    .then(function(r){return r.json();})
-    .then(function(data){
-      if(data.error){showSt('API error: '+data.error.message,'err');return;}
-      var txt=(data.content||[]).map(function(b){return b.text||'';}).join('\n');
-      if(!txt||txt.trim().length<50){showSt('Could not extract text from PDF.','err');return;}
-      parseSheet(txt);
-    })
-    .catch(function(err){showSt('Upload error: '+err.message,'err');console.error(err);});
-  };
-  reader.onerror=function(){showSt('File read failed.','err');};
-  reader.readAsArrayBuffer(file);
+  try{
+    var txt=await psPdfLines(new Uint8Array(await file.arrayBuffer()));
+    if(!txt||txt.trim().length<50){showSt('Could not read any text from this PDF.','err');return;}
+    parseSheet(txt);
+  }catch(err){showSt('Upload error: '+err.message,'err');console.error(err);}
+  finally{var fu=document.getElementById('pfu');if(fu)fu.value='';}
 }
 
 function parsePasted(){
@@ -987,8 +1001,12 @@ function parsePasted(){
 }
 
 // ── PARSER ────────────────────────────────────────────────────────────────
+// Two layouts:
+//  NCAA D3 — "Event 1 Women 500 Freestyle", rows "1 Last, First JR Team B 4:47.51" (standard before the time)
+//  UAA     — "#7 Women 500 Yard Freestyle", rows "1 Last, First SO EMOR-GA 4:55.44 Q25" (standard after the
+//            time, often blank), relays "2 EMOR-GA A 7:26.16 Q25", diving scores, NT/NP seeds
 function parseSheet(raw){
-  var ELIG={FR:1,SO:1,JR:1,SR:1,GRAD:1,GR:1,'5TH':1};
+  var ELIG={FR:1,SO:1,JR:1,SR:1,GRAD:1,GR:1,GS:1,FY:1,'5TH':1,'5Y':1,'6Y':1};
   var STD={B:1,BB:1,A:1,AA:1,AAA:1,AAAA:1,NS:1,NT:1};
   function isTime(s){return /^\d{1,2}:\d{2}\.\d{2}$/.test(s)||/^\d{2,3}\.\d{2}$/.test(s);}
   function skipLine(l){
@@ -996,23 +1014,59 @@ function parseSheet(raw){
     if(/^---/.test(l)||/INVITED/i.test(l)||/^Name /i.test(l))return true;
     if(/^Team.Name/i.test(l)||/^Std.Seed/i.test(l)||/^Selections/i.test(l))return true;
     if(/^\d+\/\d+/.test(l)||/^Page \d/i.test(l))return true;
+    if(/^Team Relay/i.test(l)||/\bRecord:/i.test(l)||/MEET MANAGER/i.test(l)||/^Psych Sheet$/i.test(l))return true;
+    if(/Championships?\s+-\s+\d{1,2}\/\d{1,2}\/\d{4}/i.test(l))return true;   // meet title line
     return false;
   }
+  // Pasted text: Meet Manager's page header runs straight into the last row on a page
+  // ("5:14.66University of Chicago HY-TEK's MEET MANAGER…") — split it back off.
+  raw=String(raw).replace(/^(.*?(?:\d\.\d\d|\bNT|\bNP)(?:\s+[A-Z0-9]{1,4})?)(?=[A-Z][a-z][^\n]*HY-TEK)/gm,'$1\n');
   var lines=raw.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>0;});
-  var events=[],cur=null,sc=0,tot=0;
+  var uaa=lines.some(function(l){return /^#\d+\s+(Women|Men|Mixed)\s/i.test(l);});
+  var events=[],cur=null,sc=0,tot=0,missed=[];
   for(var li=0;li<lines.length;li++){
     var line=lines[li];
     if(skipLine(line))continue;
-    var em=line.match(/^Event\s+(\d+)\s+(Women|Men|Mixed)\s+(.+)/i);
+    var em=line.match(/^(?:Event\s+|#)(\d+)\s+(Women|Men|Mixed)\s+(.+)/i);
     if(em){
-      cur={num:parseInt(em[1]),gender:em[2].charAt(0).toUpperCase()+em[2].slice(1).toLowerCase(),
-           name:em[3].trim(),isRelay:/relay/i.test(em[3]),entries:[],active:true,day:1};
+      var num=parseInt(em[1]),gen=em[2].charAt(0).toUpperCase()+em[2].slice(1).toLowerCase();
+      if(cur&&cur.num===num&&cur.gender===gen)continue;                // repeated heading on a new page
+      var nmEv=em[3].trim().replace(/\s+Yard\s+/i,' '),dv=nmEv.match(/^(\d)\s*(?:mtr|meter|m)\b.*Diving/i);
+      cur={num:num,gender:gen,name:dv?(dv[1]==='1'?'1m Springboard':'3m Springboard'):nmEv,
+           isRelay:/relay/i.test(nmEv),entries:[],active:true,day:1};
+      if(dv)cur.isDiving=true;
       events.push(cur);sc=0;continue;
     }
     if(!cur)continue;
     var tok=line.split(/\s+/);
     if(tok.length<3||!/^\d+$/.test(tok[0]))continue;
     var place=parseInt(tok[0]);if(place<=0)continue;
+    if(uaa){
+      // seed = last time/score/NT/NP; anything after it is the qualifying standard (Q25, D3A, D3B…)
+      var s=-1;
+      for(var k=tok.length-1;k>=1;k--){if(isTime(tok[k])||/^(NT|NP)$/i.test(tok[k])){s=k;break;}}
+      if(s<2||s<tok.length-2){missed.push(cur.gender+' '+cur.name+': '+line);continue;}
+      var seed=/^(NT|NP)$/i.test(tok[s])?'':tok[s],std=tok[s+1]||(seed?'':tok[s].toUpperCase());
+      if(cur.isRelay){
+        var tt=tok.slice(1,s),ltr='';
+        if(tt.length>1&&/^[A-F]$/.test(tt[tt.length-1]))ltr=tt.pop();
+        var rteam=tt.join(' ');
+        if(!rteam){missed.push(cur.gender+' '+cur.name+': '+line);continue;}
+        sc++;cur.entries.push({seedPlace:sc,name:rteam+(ltr?' '+ltr:'')+' Relay',year:'',team:rteam,std:std,seedTime:seed});tot++;
+      } else {
+        var ei=-1,yr='',pre=null;
+        for(var t1=2;t1<s;t1++){if(ELIG[tok[t1].toUpperCase()]){ei=t1;yr=tok[t1].toUpperCase();break;}}
+        if(ei<0){   // long name runs into the year: "Monera Cabarique, SheilaJR CWRU 24.09"
+          for(var t2=2;t2<s;t2++){var gm=tok[t2].match(/^(.*[a-z.'])(FR|SO|JR|SR|GS|GR|FY)$/);if(gm){ei=t2;yr=gm[2];pre=gm[1];break;}}
+        }
+        if(ei<0){missed.push(cur.gender+' '+cur.name+': '+line);continue;}
+        var nmParts=tok.slice(1,ei);if(pre)nmParts.push(pre);
+        var nm2=nmParts.join(' '),tm2=tok.slice(ei+1,s).join(' ');
+        if(!nm2||!tm2){missed.push(cur.gender+' '+cur.name+': '+line);continue;}
+        sc++;cur.entries.push({seedPlace:sc,name:nm2,year:yr,team:tm2,std:std,seedTime:seed});tot++;
+      }
+      continue;
+    }
     if(cur.isRelay){
       var last=tok[tok.length-1],sl=tok[tok.length-2];
       if(!isTime(last)||!STD[sl.toUpperCase()])continue;
@@ -1032,12 +1086,20 @@ function parseSheet(raw){
       sc++;cur.entries.push({seedPlace:sc,name:nm,year:tok[ei].toUpperCase(),team:tm,std:tok[si],seedTime:tok[si+1]||''});tot++;
     }
   }
-  if(!events.length){showSt('No events found. Check format: "Event 1 Women 500 Freestyle"','err');return;}
+  if(!events.length){showSt('No events found. Check format: "Event 1 Women 500 Freestyle" or "#1 Women 500 Yard Freestyle"','err');return;}
   var ts={};
   events.forEach(function(ev){ev.entries.forEach(function(en){if(en.team)ts[en.team]=1;});});
   S.events=events;S.teams=Object.keys(ts).sort();S.activeTeams=S.teams.slice();S.liveResults={};injectDivingEvents();
+  // Team codes (EMOR-GA): point Home Team at Emory's code if the current name isn't on the sheet
+  if(S.teams.indexOf(S.homeTeam)<0){
+    var hk=String(S.homeTeam||'').toLowerCase().replace(/[^a-z]/g,'').slice(0,4);
+    var hh=hk?S.teams.filter(function(t){return t.toLowerCase().replace(/[^a-z]/g,'').slice(0,4)===hk;}):[];
+    if(hh.length===1){S.homeTeam=hh[0];var hte=document.getElementById('ht');if(hte)hte.value=hh[0];}
+  }
   autoDays();
-  showSt('Loaded: '+events.length+' events, '+tot+' entries, '+S.teams.length+' teams','ok');
+  if(missed.length)console.warn('Psych rows not read:\n'+missed.join('\n'));
+  showSt('Loaded: '+events.length+' events, '+tot+' entries, '+S.teams.length+' teams'+
+    (missed.length?' — '+missed.length+' row'+(missed.length>1?'s':'')+' could not be read (first: '+missed[0]+')':''),missed.length?'err':'ok');
   document.getElementById('pps').style.display='block';
   renderSetup();save();
 }
