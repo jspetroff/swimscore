@@ -228,6 +228,8 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .pr.dro{opacity:.3;}
 body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing;}
 body.dragging .dh{cursor:grabbing;}
+.pr[data-rk]{min-height:32px;}
+.rwg{opacity:.45;}
 .hl{font-family:var(--fm);font-size:.62rem;letter-spacing:.12em;color:var(--gold);padding:.15rem 0 .1rem;}
 .hl.hlb{border-top:1px dashed var(--border);margin-top:.35rem;padding-top:.45rem;}
 .sc{display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--text-dim);}
@@ -1545,6 +1547,8 @@ function renderEventBody(gi){
   var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
   var hasFinal=d.final.some(function(x){return x&&x.team;});
   var preLocked=mode==='prelim'&&!isTF&&!!(S.liveResults[gi]&&S.liveResults[gi].prelimLocked);
+  // Nothing entered yet: show the chalk order dimmed so it can be dragged straight away (first drag commits it)
+  var ghost=!res.some(function(x){return x&&x.team;})?chalkSrc(gi,mode):null;
   var h='';
 
   // Toggle pill
@@ -1568,6 +1572,8 @@ function renderEventBody(gi){
     h+='<div style="font-size:.7rem;color:var(--green);font-family:var(--fm);margin-bottom:.75rem">&#9654; Final results &mdash; these score points</div>';
   }
 
+  if(ghost&&!preLocked)h+='<div style="font-size:.68rem;color:var(--text-dim);font-family:var(--fm);margin:-.45rem 0 .7rem">Not entered yet &mdash; showing '+(mode==='final'&&hasPrelim?'prelim':'psych')+' order. Drag to set the result, or Goes Chalk to accept it.</div>';
+
   // Column headers
   var col3hdr=(mode==='final'&&hasPrelim)?'Prelim&#8594;Final pts':'Psych seed';
   // Finals from prelims: a swimmer can only move within their own final (A 1-8, B 9-16, C 17-24)
@@ -1576,7 +1582,7 @@ function renderEventBody(gi){
   h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:44px 1fr 1fr auto auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span title="Check on the LOWER place to indicate a tie with the place above">=&#8593;</span><span>SCR</span><span>DQ</span></div>';
 
   for(var rk=0;rk<pts.length;rk++){
-    var r=res[rk]||{};
+    var r=ghost?(ghost[rk]?{team:ghost[rk].team,name:ghost[rk].name}:{}):(res[rk]||{});
     var ps=entries[rk]||{};
     var tm=r.team!==undefined?r.team:'';
     var sc2=r.scratch?'checked':'';
@@ -1627,9 +1633,9 @@ function renderEventBody(gi){
       +(tm&&!preLocked?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
       +(rk+1)+(r.dq?' DQ':'')+'</span>';
     // Swimmer name first (what you match to the scoreboard), team beside it; reorder by dragging
-    h+='<div class="rw" style="min-width:0;display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
-      +(tm?(r.name?'<span style="font-size:.95rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
-              :'<span style="font-size:.95rem;font-weight:500;color:var(--text)">'+esc(tm)+'</span>')
+    h+='<div class="rw'+(ghost?' rwg':'')+'" style="min-width:0;display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
+      +(tm?(r.name&&!(ev.isRelay&&r.name.indexOf(tm)===0)?'<span style="font-size:.95rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
+              :'<span style="font-size:.95rem;font-weight:500;color:var(--text)">'+esc(ev.isRelay&&r.name&&r.name.indexOf(tm)===0?r.name.replace(/\s+Relay$/i,''):tm)+'</span>')
           :'<span style="color:var(--text-dim);font-size:.75rem">—</span>')+'</div>';
     h+=refCell;
     h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+(preLocked?' disabled':'')+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
@@ -1658,6 +1664,7 @@ function drStart(e,gi,rk){
   var ev=S.events[gi];if(!ev)return;
   var isTF=isTimedFinal(ev),mode=isTF?'final':evMode(gi),d=getLR(gi);
   if(mode==='prelim'&&S.liveResults[gi]&&S.liveResults[gi].prelimLocked)return;
+  if(!d[mode].some(function(x){return x&&x.team;})){mkDone(gi,true);d=getLR(gi);}
   var lock=mode==='final'&&!isTF&&d.prelim.some(function(x){return x&&x.team;});
   var n=mpts(ev.isRelay).length,lo=lock?Math.floor(rk/8)*8:0,hi=lock?Math.min(lo+7,n-1):n-1;
   var pg=document.getElementById('pg'+gi);if(!pg)return;
@@ -1777,22 +1784,19 @@ function setLR(gi,rk,f,v){
   if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('partial');}
 }
 
-function mkDone(gi){
+// Order "Goes Chalk" fills from: finals use prelim order when there is one, otherwise the psych seeds
+function chalkSrc(gi,mode){
+  var ev=S.events[gi],d=getLR(gi);
+  if(mode==='final'&&d.prelim.some(function(x){return x&&x.team;}))return d.prelim;
+  return ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
+}
+function mkDone(gi,quiet){
   var ev=S.events[gi];if(!ev)return;
   var mode=isTimedFinal(ev)?'final':evMode(gi);
   var d=S.liveResults[gi];
   if(!d||Array.isArray(d))S.liveResults[gi]={prelim:Array.isArray(d)?d:[],final:[]};
   var pts=mpts(ev.isRelay);
-  // Source: in final mode use prelim order if available, else psych; in prelim mode use psych
-  var src=[];
-  if(mode==='final'){
-    var pr=S.liveResults[gi].prelim||[];
-    var hasPrelim=pr.some(function(x){return x&&x.team;});
-    if(hasPrelim){src=pr;}
-    else{src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});}
-  } else {
-    src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
-  }
+  var src=chalkSrc(gi,mode);
   if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
   for(var rk=0;rk<pts.length;rk++){
     if(!S.liveResults[gi][mode][rk]||!S.liveResults[gi][mode][rk].team){
@@ -1804,7 +1808,7 @@ function mkDone(gi){
   if(eh){eh.classList.remove('done','partial','pending');eh.classList.add(mode==='final'?'done':'partial');}
   var epb=document.getElementById('epb'+gi);
   if(epb)epb.textContent=statusLabel(gi);
-  renderEventBody(gi);
+  if(!quiet)renderEventBody(gi);
   updLB();updClinch();
 }
 
