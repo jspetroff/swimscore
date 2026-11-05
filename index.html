@@ -226,6 +226,7 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .pr.drg{position:relative;z-index:5;background:var(--bg3);box-shadow:0 4px 14px rgba(0,0,0,.45);border-radius:4px;}
 .pr.drt{box-shadow:inset 0 0 0 1px var(--gold);border-radius:4px;}
 .pr.dro{opacity:.35;}
+.pr[data-rk]{min-height:32px;}
 .pr.prg{border-top:1px dashed var(--border);padding-top:.35rem;margin-top:.2rem;}
 .sc{display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--text-dim);}
 
@@ -1575,15 +1576,6 @@ function renderEventBody(gi){
     var sc2=r.scratch?'checked':'';
     var dq2=r.dq?'checked':'';
     var tie2=r.tie?'checked':'';
-    var opts='<option value="">—</option>';
-    // In final mode with prelim results, only show teams that made the final (from prelim)
-    var dropdownTeams=S.activeTeams;
-    if(mode==='final'&&hasPrelim&&prelimRes.length){
-      var prelimTeams=[];
-      prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq&&prelimTeams.indexOf(x.team)<0)prelimTeams.push(x.team);});
-      if(prelimTeams.length)dropdownTeams=prelimTeams;
-    }
-    dropdownTeams.forEach(function(tt){opts+='<option value="'+esc(tt)+'"'+(tt===tm?' selected':'')+'>'+esc(tt)+'</option>';});
     var refCell='';
     if(mode==='final'&&hasPrelim){
       var pts_arr=mpts(ev.isRelay);
@@ -1628,8 +1620,11 @@ function renderEventBody(gi){
     h+='<span class="pn" style="display:flex;align-items:center;gap:.3rem;'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'
       +(tm?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
       +(rk+1)+(r.dq?' DQ':'')+'</span>';
-    h+='<div style="min-width:0;display:flex;flex-direction:column;gap:.1rem"><select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>'
-      +(tm&&r.name?'<span style="font-size:.68rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.name)+'</span>':'')+'</div>';
+    // Swimmer name first (what you match to the scoreboard), team beside it; reorder by dragging
+    h+='<div class="rw" style="min-width:0;display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
+      +(tm?(r.name?'<span style="font-size:.8rem;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.68rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
+              :'<span style="font-size:.8rem;color:var(--text)">'+esc(tm)+'</span>')
+          :'<span style="color:var(--text-dim);font-size:.75rem">—</span>')+'</div>';
     h+=refCell;
     h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
     h+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
