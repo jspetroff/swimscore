@@ -1543,6 +1543,7 @@ function renderEventBody(gi){
   var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
   var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
   var hasFinal=d.final.some(function(x){return x&&x.team;});
+  var preLocked=mode==='prelim'&&!isTF&&!!(S.liveResults[gi]&&S.liveResults[gi].prelimLocked);
   var h='';
 
   // Toggle pill
@@ -1558,6 +1559,8 @@ function renderEventBody(gi){
   // Context line
   if(isTF){
     h+='<div style="font-size:.7rem;color:var(--green);font-family:var(--fm);margin-bottom:.75rem">&#9654; Timed final &mdash; scores points</div>';
+  } else if(preLocked){
+    h+='<div style="font-size:.7rem;color:var(--gold);font-family:var(--fm);margin-bottom:.75rem">&#128274; Uploaded prelims &mdash; locked. Set finals order in FINAL.</div>';
   } else if(mode==='prelim'){
     h+='<div style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm);margin-bottom:.75rem">Prelim results &mdash; not scored. Switch to FINAL after the race.</div>';
   } else {
@@ -1620,7 +1623,7 @@ function renderEventBody(gi){
     if(lockFin&&rk%8===0)h+='<div class="hl'+(rk>0?' hlb':'')+'">'+'ABC'.charAt(rk/8)+' FINAL</div>';
     h+='<div class="pr" data-rk="'+rk+'" style="grid-template-columns:44px 1fr 1fr auto auto auto">';
     h+='<span class="pn" style="display:flex;align-items:center;gap:.3rem;'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'
-      +(tm?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
+      +(tm&&!preLocked?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
       +(rk+1)+(r.dq?' DQ':'')+'</span>';
     // Swimmer name first (what you match to the scoreboard), team beside it; reorder by dragging
     h+='<div class="rw" style="min-width:0;display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
@@ -1628,17 +1631,17 @@ function renderEventBody(gi){
               :'<span style="font-size:.95rem;font-weight:500;color:var(--text)">'+esc(tm)+'</span>')
           :'<span style="color:var(--text-dim);font-size:.75rem">—</span>')+'</div>';
     h+=refCell;
-    h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
-    h+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
-    h+='<label class="sc" title="DQ"><input type="checkbox" '+dq2+' onchange="setLR('+gi+','+rk+',\'dq\',this.checked)"></label>';
+    h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+(preLocked?' disabled':'')+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
+    h+='<label class="sc"><input type="checkbox" '+sc2+(preLocked?' disabled':'')+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
+    h+='<label class="sc" title="DQ"><input type="checkbox" '+dq2+(preLocked?' disabled':'')+' onchange="setLR('+gi+','+rk+',\'dq\',this.checked)"></label>';
     h+='</div>';
   }
   h+='</div>';
 
   var chalkLabel=(mode==='final'&&hasPrelim)?'&#9654; Chalk from Prelim':'&#9654; Goes Chalk';
   h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">';
-  h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">'+chalkLabel+'</button>';
-  h+='<button class="btn bsm" onclick="clrEv('+gi+')">Clear</button>';
+  if(!preLocked)h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">'+chalkLabel+'</button>';
+  h+='<button class="btn bsm" onclick="clrEv('+gi+')">'+(preLocked?'Clear prelims (unlocks)':'Clear')+'</button>';
   h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">&#9776; drag to reorder'+(lockFin?' (within each final)':'')+' &middot; =&#8593; check on LOWER place to tie with place above &middot; SCR = scratch &middot; DQ = disqualified</span>';
   h+='</div>';
   eb.innerHTML=h;
@@ -1653,6 +1656,7 @@ function drStart(e,gi,rk){
   e.preventDefault();
   var ev=S.events[gi];if(!ev)return;
   var isTF=isTimedFinal(ev),mode=isTF?'final':evMode(gi),d=getLR(gi);
+  if(mode==='prelim'&&S.liveResults[gi]&&S.liveResults[gi].prelimLocked)return;
   var lock=mode==='final'&&!isTF&&d.prelim.some(function(x){return x&&x.team;});
   var n=mpts(ev.isRelay).length,lo=lock?Math.floor(rk/8)*8:0,hi=lock?Math.min(lo+7,n-1):n-1;
   var pg=document.getElementById('pg'+gi);if(!pg)return;
@@ -1810,7 +1814,7 @@ function mkDone(gi){
 function clrEv(gi){
   var mode=evMode(gi);
   var d=S.liveResults[gi];
-  if(d&&!Array.isArray(d)){d[mode]=[];}
+  if(d&&!Array.isArray(d)){d[mode]=[];if(mode==='prelim')delete d.prelimLocked;}
   else{delete S.liveResults[gi];}
   save();renderLiveEvs();updLB();updClinch();
 }
@@ -2705,7 +2709,15 @@ function rpApply(){
     var d=S.liveResults[e.gi];
     if(!d||Array.isArray(d))S.liveResults[e.gi]={prelim:Array.isArray(d)?d:[],final:[]};
     S.liveResults[e.gi][e.mode]=arr;
-    if(!isTimedFinal(ev))S.liveMode[e.gi]=e.mode;
+    if(e.mode==='prelim'&&!isTimedFinal(ev)){
+      // Uploaded prelims are the official record: lock them and go straight to finals,
+      // seeded from prelim order (left alone if finals are already entered)
+      S.liveResults[e.gi].prelimLocked=true;
+      S.liveMode[e.gi]='final';
+      var fin=S.liveResults[e.gi].final||[];
+      if(!fin.some(function(x){return x&&x.team;}))
+        S.liveResults[e.gi].final=arr.slice(0,pts.length).map(function(x){return{team:x.team,name:x.name||'',scratch:false,dq:false,tie:false};});
+    } else if(!isTimedFinal(ev))S.liveMode[e.gi]=e.mode;
     placed+=arr.length;
   });
   var n=_rp.evs.length,file=_rp.file;_rp=null;
