@@ -527,40 +527,23 @@ body.dragging .dh{cursor:grabbing;}
         </div>
         <div id="rpStatus"></div>
       </div>
-      <div class="cgrid">
-        <div class="card">
-          <div class="ct">Leaderboard</div>
-          <div style="max-height:520px;overflow-y:auto">
-            <table class="lb lb-fixed" style="border-collapse:collapse">
-              <colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col class="lbc-fin"><col class="lbc-fin"><col class="lbc-fin"></colgroup>
-              <thead><tr>
-                <th style="position:sticky;top:0;background:var(--bg2);z-index:1">#</th>
-                <th style="position:sticky;top:0;background:var(--bg2);z-index:1">Team</th>
-                <th style="position:sticky;top:0;background:var(--bg2);z-index:1">Pts</th>
-                <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="A Final swims (places 1-8)">A</th>
-                <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="B Final swims (places 9-16)">B</th>
-                <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="C Final swims (places 17-24)">C</th>
-              </tr></thead>
-              <tbody id="ltb"></tbody>
-            </table>
-          </div>
-        </div>
-        <div class="card">
-          <div class="ct" style="display:flex;align-items:center;justify-content:space-between">Clinch Status<button class="btn bsm" onclick="showMeetReport()" style="font-size:.65rem">&#9733; Meet Report</button></div>
-          <div id="clinch" class="cb cn">Loading...</div>
-          <div style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem;margin-bottom:.875rem">Points remaining for 1st place: <strong id="avail">—</strong></div>
-          <div>
-            <table class="lb lb-fixed" style="border-collapse:collapse">
-              <colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col style="width:90px"></colgroup>
-              <thead><tr>
-                <th>#</th>
-                <th>Team</th>
-                <th>Pts</th>
-                <th>Gap</th>
-              </tr></thead>
-              <tbody id="clinchTbl"></tbody>
-            </table>
-          </div>
+      <div class="card">
+        <div class="ct" style="display:flex;align-items:center;justify-content:space-between">Leaderboard<button class="btn bsm" onclick="showMeetReport()" style="font-size:.65rem">&#9733; Meet Report</button></div>
+        <div id="clinch" class="cb cn">Loading...</div>
+        <div style="max-height:520px;overflow-y:auto;margin-top:.75rem">
+          <table class="lb lb-fixed" style="border-collapse:collapse">
+            <colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col style="width:96px"><col class="lbc-fin"><col class="lbc-fin"><col class="lbc-fin"></colgroup>
+            <thead><tr>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1">#</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1">Team</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1">Pts</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" id="lbGapHdr" title="Home team ahead (+) or behind (&minus;) this team">vs Home</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="A Final swims (places 1-8)">A</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="B Final swims (places 9-16)">B</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="C Final swims (places 17-24)">C</th>
+            </tr></thead>
+            <tbody id="ltb"></tbody>
+          </table>
         </div>
       </div>
       <div class="card">
@@ -2402,6 +2385,8 @@ function updLB(){
   var sc=liveScores(),home=S.homeTeam;
   var fc=finalCounts();
   var rows=Object.keys(sc).map(function(t){return[t,sc[t]];}).sort(function(a,b){return b[1]-a[1];});
+  var hs=sc[home]||0,hh=document.getElementById('lbGapHdr');if(hh)hh.textContent='vs '+home;
+  function f1(n){return Math.round(n*10)%10?n.toFixed(1):String(Math.round(n));}
   var h='';
   rows.forEach(function(row,i){
     var t=row[0],p=row[1],ih=t===home;
@@ -2411,6 +2396,9 @@ function updLB(){
     h+='<td><span class="rb '+rc+'">'+(i+1)+'</span></td>';
     h+='<td class="lbtm">'+esc(t)+(ih?' &#127968;':'')+'</td>';
     h+='<td><strong>'+p.toFixed(1)+'</strong></td>';
+    // From the home team's point of view: +40 = we're 40 ahead of them, −12 = we're 12 behind
+    var dg=hs-p;
+    h+='<td class="lbgap">'+(ih?'<span style="color:var(--text-dim)">&mdash;</span>':dg>0?'<span style="color:var(--green)">+'+f1(dg)+'</span>':dg<0?'<span style="color:var(--red)">&minus;'+f1(-dg)+'</span>':'<span style="color:var(--text-dim)">0</span>')+'</td>';
     h+='<td style="font-family:var(--fm);color:var(--gold)">'+(f.a||'—')+'</td>';
     h+='<td style="font-family:var(--fm);color:#a8a9ac">'+(f.b||'—')+'</td>';
     h+='<td style="font-family:var(--fm);color:#c07d3a">'+(f.c||'—')+'</td>';
@@ -2513,52 +2501,17 @@ function updProjection(){
 }
 
 function updClinch(){
+  // Where the home team stands right now
   var sc=liveScores(),home=S.homeTeam,hs=sc[home]||0;
-  var allTeams=Object.keys(sc).map(function(t){return{team:t,pts:sc[t]||0};}).sort(function(a,b){return b.pts-a.pts;});
-  var homeRank=allTeams.findIndex(function(x){return x.team===home;})+1;
-
-  // Points remaining — only count events with no final results yet
-  var done={};
-  Object.keys(S.liveResults).forEach(function(gi){
-    var d=S.liveResults[gi];
-    var finalRes=Array.isArray(d)?d:(d&&d.final||[]);
-    if(finalRes.some(function(x){return x&&x.team;})&&!isPending(gi))done[parseInt(gi)]=1;
-  });
-  var rem=actEvs('full').filter(function(ev){return!done[S.events.indexOf(ev)];});
-  var avail=0;rem.forEach(function(ev){var p=mpts(ev.isRelay);avail+=p[0]||0;});
-  document.getElementById('avail').textContent=avail.toFixed(0)+' pts';
-
-  // Clinch banner
-  var leader=allTeams[0]||{team:'—',pts:0};
-  var gap=hs-leader.pts;
-  var el=document.getElementById('clinch');
-  var msg='';
-  if(hs===0&&leader.pts===0){msg='&#9203; Meet not started';el.className='cb cn';}
-  else if(homeRank===1&&gap>avail){msg='&#9989; '+home+' clinches! Lead: +'+gap.toFixed(1)+' pts';el.className='cb cw';}
-  else if(homeRank===1){msg='&#128994; '+home+' leads by '+gap.toFixed(1)+' pts';el.className='cb cn';}
-  else{msg='&#128308; '+home+' is '+homeRank+(homeRank===2?'nd':homeRank===3?'rd':'th')+', trails '+leader.team+' by '+Math.abs(gap).toFixed(1)+' pts';el.className='cb cl2';}
+  var all=Object.keys(sc).map(function(t){return{team:t,pts:sc[t]||0};}).sort(function(a,b){return b.pts-a.pts;});
+  var rank=all.findIndex(function(x){return x.team===home;})+1;
+  var el=document.getElementById('clinch');if(!el)return;
+  function f1(n){return Math.round(n*10)%10?n.toFixed(1):String(Math.round(n));}
+  var msg;
+  if(!all.some(function(x){return x.pts;})){msg='&#9203; Nothing scored yet';el.className='cb cn';}
+  else if(rank===1){var nx=all[1]||{team:'—',pts:0};msg='&#128994; '+esc(home)+' leads '+esc(nx.team)+' by '+f1(hs-nx.pts)+' pts';el.className='cb cn';}
+  else{var ld=all[0];msg='&#128308; '+esc(home)+' is '+rank+(rank===2?'nd':rank===3?'rd':'th')+', '+f1(ld.pts-hs)+' pts behind '+esc(ld.team);el.className='cb cl2';}
   el.innerHTML=msg;
-
-  // Top-10 standings table
-  var top=allTeams.slice(0,10);
-  var th='';
-  top.forEach(function(row,i){
-    var isHome=row.team===home;
-    var gapToHome=row.pts-hs;
-    var gapStr=isHome?'<span style="color:var(--text-dim)">—</span>':
-      gapToHome>0?'<span style="color:var(--red)">+'+gapToHome.toFixed(1)+'</span>':
-      '<span style="color:var(--green)">'+gapToHome.toFixed(1)+'</span>';
-    var rc=i===0?'r1':i===1?'r2':i===2?'r3':'rx';
-    th+='<tr class="'+(isHome?'ht':'')+'">';
-    th+='<td><span class="rb '+rc+'">'+(i+1)+'</span></td>';
-    th+='<td class="lbtm">'+esc(row.team)+(isHome?' &#127968;':'')+'</td>';
-    th+='<td><strong>'+row.pts.toFixed(1)+'</strong></td>';
-    th+='<td class="lbgap">'+gapStr+'</td>';
-    th+='</tr>';
-  });
-  var tbl=document.getElementById('clinchTbl');
-  if(tbl)tbl.innerHTML=th;
-  updProjection();
 }
 
 // ── MEET MANAGER UI ───────────────────────────────────────────────────────
