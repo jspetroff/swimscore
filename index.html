@@ -351,6 +351,11 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
     <button class="tb" onclick="showTab('depth',this)">03 &middot; Depth</button>
     <button class="tb" onclick="showTab('live',this)">04 &middot; Live</button>
   </div>
+  <div class="sp" id="gsp" style="display:none;margin:-.75rem 0 1.25rem">
+    <div class="pill" data-g="Women" onclick="setGender('Women')">Women</div>
+    <div class="pill" data-g="Men" onclick="setGender('Men')">Men</div>
+    <div class="pill" data-g="all" onclick="setGender('all')">Combined</div>
+  </div>
 
   <!-- TAB 1: SETUP -->
   <div id="tab-setup" class="tp act">
@@ -893,6 +898,7 @@ function applyLoadedState(){
   document.querySelectorAll('#ssp .pill').forEach(function(p){if(p.getAttribute('onclick')&&p.getAttribute('onclick').indexOf("'"+S.session+"'")>=0)p.classList.add('active');});
   document.querySelectorAll('#psp .pill').forEach(function(p){p.classList.remove('active');});
   document.querySelectorAll('#psp .pill').forEach(function(p){if(p.getAttribute('onclick')&&p.getAttribute('onclick').indexOf("'"+S.projSession+"'")>=0)p.classList.add('active');});
+  renderGenderPills();
   if(S.events&&S.events.length){injectDivingEvents();document.getElementById('pps').style.display='block';renderSetup();}
   else{document.getElementById('pps').style.display='none';renderSetup();}
   // Reset tabs to setup
@@ -1101,7 +1107,7 @@ function parseSheet(raw){
   showSt('Loaded: '+events.length+' events, '+tot+' entries, '+S.teams.length+' teams'+
     (missed.length?' — '+missed.length+' row'+(missed.length>1?'s':'')+' could not be read (first: '+missed[0]+')':''),missed.length?'err':'ok');
   document.getElementById('pps').style.display='block';
-  renderSetup();save();
+  renderGenderPills();renderSetup();save();
 }
 
 function autoDays(){
@@ -1172,10 +1178,32 @@ function clearAll(){if(confirm('Clear all data for this meet?')){S.events=[];S.t
 // ── SCORING UTILS ─────────────────────────────────────────────────────────
 function mpts(isRelay){var m=MDL[S.scoringModel]||MDL.ncaa;return isRelay?m.rel:m.ind;}
 
+// ── GENDER VIEW ──────────────────────────────────────────────────────────
+// Per-device choice (not synced), so a viewer can watch men while the scorer watches women.
+// Only applies when the meet has both genders; single-gender meets ignore it.
+var GENDER=(function(){try{return localStorage.getItem('swimscore_gender')||'Women';}catch(e){return 'Women';}})();
+function meetGenders(){var g=[];(S.events||[]).forEach(function(ev){if(ev.gender&&g.indexOf(ev.gender)<0)g.push(ev.gender);});return g;}
+function viewGender(){var g=meetGenders();return g.length>1&&GENDER!=='all'&&g.indexOf(GENDER)>=0?GENDER:null;}
+function evOn(ev){if(!ev||!ev.active)return false;var g=viewGender();return !g||ev.gender===g;}
+function renderGenderPills(){
+  var bar=document.getElementById('gsp');if(!bar)return;
+  bar.style.display=meetGenders().length>1?'flex':'none';
+  var cur=viewGender()||'all';
+  bar.querySelectorAll('.pill').forEach(function(p){p.classList.toggle('active',p.getAttribute('data-g')===cur);});
+}
+function setGender(g){
+  GENDER=g;try{localStorage.setItem('swimscore_gender',g);}catch(e){}
+  renderGenderPills();
+  var act=document.querySelector('.tp.act'),id=act?act.id:'';
+  if(id==='tab-proj')renderProj();
+  else if(id==='tab-depth')renderDepthSetup();
+  else if(id==='tab-live')renderLive();
+}
+
 function actEvs(df){
   var day=df||S.session;
   return S.events.filter(function(ev){
-    if(!ev.active)return false;
+    if(!evOn(ev))return false;
     if(day==='full')return true;
     return ev.day===parseInt(day.replace('day',''));
   });
@@ -1375,7 +1403,7 @@ function renderDepth(){
     var counts={};
     grps.forEach(function(g){counts[g.k]=0;});
     S.events.forEach(function(ev){
-      if(!ev.active)return;
+      if(!evOn(ev))return;
       var grp=evGrp(ev.name,ev.isRelay);
       var pts=mpts(ev.isRelay);
       var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
@@ -1401,7 +1429,7 @@ function renderDepth(){
     // Leads and zeros
     var leads=[],zeros=[];
     S.events.forEach(function(ev){
-      if(!ev.active)return;
+      if(!evOn(ev))return;
       var pts=mpts(ev.isRelay);
       var ord=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
       var rk=-1;for(var ri=0;ri<ord.length;ri++){if(ord[ri].team===team){rk=ri;break;}}
@@ -1429,7 +1457,7 @@ function renderDepth(){
   var totals={};teams.forEach(function(t){totals[t]=0;});
   var bh='';
   S.events.forEach(function(ev){
-    if(!ev.active)return;
+    if(!evOn(ev))return;
     var pts=mpts(ev.isRelay);
     var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
     function teamPts(team){
@@ -1722,7 +1750,7 @@ function liveScores(){
   S.activeTeams.forEach(function(t){sc[t]=0;});
   Object.keys(S.liveResults).forEach(function(gis){
     var gi=parseInt(gis),ev=S.events[gi];
-    if(!ev||!ev.active)return;
+    if(!evOn(ev))return;
     var pts=mpts(ev.isRelay);
     var d=S.liveResults[gi];
     // Score from final; for timed finals fall back to prelim if final is empty
@@ -1762,7 +1790,7 @@ function finalCounts(){
   var counts={};
   S.activeTeams.forEach(function(t){counts[t]={a:0,b:0,c:0};});
   S.events.forEach(function(ev){
-    if(!ev.active||ev.isRelay)return; // only individual events have A/B/C finals
+    if(!evOn(ev)||ev.isRelay)return; // only individual events have A/B/C finals
     var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
     entries.forEach(function(en,idx){
       if(!counts[en.team])return;
