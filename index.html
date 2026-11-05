@@ -1239,7 +1239,7 @@ function calcProj(df){
   S.activeTeams.forEach(function(t){res[t]={total:0,sprints:0,distance:0,im:0,back:0,breast:0,fly:0,relays:0};});
   evs.forEach(function(ev){
     var pts=mpts(ev.isRelay);
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
     // Score against full field, credit only active teams
     var rank=0;
     var i=0;
@@ -1321,7 +1321,7 @@ function renderEvBreakdown(teamOrder, session){
   evs.forEach(function(ev){
     var pts=mpts(ev.isRelay);
     var sc={};teamOrder.forEach(function(t){sc[t]=0;});
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
     var rank=0,i=0;
     while(i<entries.length&&rank<pts.length){
       var j=i+1;
@@ -1418,7 +1418,7 @@ function renderDepth(){
       if(!evOn(ev))return;
       var grp=evGrp(ev.name,ev.isRelay);
       var pts=mpts(ev.isRelay);
-      var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+      var entries=psychOrder(ev);
       entries.forEach(function(en,idx){if(en.team===team&&idx<pts.length)counts[grp]++;});
     });
     return counts;
@@ -1443,7 +1443,7 @@ function renderDepth(){
     S.events.forEach(function(ev){
       if(!evOn(ev))return;
       var pts=mpts(ev.isRelay);
-      var ord=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+      var ord=psychOrder(ev);
       var rk=-1;for(var ri=0;ri<ord.length;ri++){if(ord[ri].team===team){rk=ri;break;}}
       var lbl='E'+ev.num+' '+ev.name;
       if(rk===0)leads.push(lbl);
@@ -1471,7 +1471,7 @@ function renderDepth(){
   S.events.forEach(function(ev){
     if(!evOn(ev))return;
     var pts=mpts(ev.isRelay);
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
     function teamPts(team){
       var sc=0,rank=0,i=0;
       while(i<entries.length&&rank<pts.length){
@@ -1543,7 +1543,7 @@ function renderEventBody(gi){
   var res=d[mode]||[];
   var prelimRes=d.prelim||[];
   var pts=mpts(ev.isRelay);
-  var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+  var entries=psychOrder(ev);
   var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
   var hasFinal=d.final.some(function(x){return x&&x.team;});
   var preLocked=mode==='prelim'&&!isTF&&!!(S.liveResults[gi]&&S.liveResults[gi].prelimLocked);
@@ -1745,7 +1745,7 @@ function renderLiveEvs(){
     var res=d[mode]||[];
     var prelimRes=d.prelim||[];
     var pts=mpts(ev.isRelay);
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
     var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
     var hasFinal=d.final.some(function(x){return x&&x.team;});
     var hasAny=hasPrelim||hasFinal;
@@ -1793,16 +1793,20 @@ function heatLock(gi,mode){
   if(uaaRelay(ev))return true;
   return mode==='final'&&!isTimedFinal(ev)&&getLR(gi).prelim.some(function(x){return x&&x.team;});
 }
+// Projected finishing order from the psych sheet. UAA relays: every A relay (in seed order) is
+// ahead of every B relay, since the B relays swim the B final.
+function psychOrder(ev){
+  var seeds=(ev.entries||[]).slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+  if(uaaRelay(ev))seeds=seeds.filter(function(e){return relayLetter(e)!=='B';}).concat(seeds.filter(function(e){return relayLetter(e)==='B';}));
+  return seeds;
+}
 function relayLetter(e){var m=String(e.name||'').match(/\s([A-Z])(?:\s+Relay)?$/);return m?m[1]:'';}
 
 // Order "Goes Chalk" fills from: finals use prelim order when there is one, otherwise the psych seeds
 function chalkSrc(gi,mode){
   var ev=S.events[gi],d=getLR(gi);
   if(mode==='final'&&d.prelim.some(function(x){return x&&x.team;}))return d.prelim;
-  var seeds=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
-  // UAA relays: all A relays (in seed order) take places 1-8, then the B relays
-  if(uaaRelay(ev))seeds=seeds.filter(function(e){return relayLetter(e)!=='B';}).concat(seeds.filter(function(e){return relayLetter(e)==='B';}));
-  return seeds.map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
+  return psychOrder(ev).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
 }
 function mkDone(gi,quiet){
   var ev=S.events[gi];if(!ev)return;
@@ -1881,7 +1885,7 @@ function finalCounts(){
   S.activeTeams.forEach(function(t){counts[t]={a:0,b:0,c:0};});
   S.events.forEach(function(ev){
     if(!evOn(ev)||ev.isRelay)return; // only individual events have A/B/C finals
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
     entries.forEach(function(en,idx){
       if(!counts[en.team])return;
       var place=idx+1;
@@ -1994,7 +1998,7 @@ function updLiveBreakdown(){
     var pts=mpts(ev.isRelay);
     var isTF=isTimedFinal(ev);
     // Psych score from seed order
-    var psychRes=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;})
+    var psychRes=psychOrder(ev)
       .map(function(e){return{team:e.team,scratch:false};});
     var psychPts=ptsFromRes(psychRes,pts);
     // Prelim
@@ -2143,7 +2147,7 @@ function buildMeetReportData(){
     if(!hasFinal)return;
 
     var evPts=mpts(ev.isRelay);
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
 
     // Build actual place map (team -> actual place, 1-indexed, non-scratched)
     var actualPlaceMap={};
@@ -2161,7 +2165,7 @@ function buildMeetReportData(){
     var psychPtsMap={};
     entries.forEach(function(en,idx){
       if(!psychPlaceMap[en.team]){
-        psychPlaceMap[en.team]=en.seedPlace;
+        psychPlaceMap[en.team]=idx+1;
         psychPtsMap[en.team]=evPts[idx]||0;
       }
     });
@@ -2356,7 +2360,7 @@ function updProjection(){
   // Psych score for completed events
   completedEvs.forEach(function(ev){
     var pts=mpts(ev.isRelay);
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
     entries.forEach(function(en,idx){
       if(idx<pts.length&&teamData[en.team]!==undefined){
         teamData[en.team].psychDone+=pts[idx];
@@ -2367,7 +2371,7 @@ function updProjection(){
   // Psych score for remaining events
   remainingEvs.forEach(function(ev){
     var pts=mpts(ev.isRelay);
-    var entries=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+    var entries=psychOrder(ev);
     entries.forEach(function(en,idx){
       if(idx<pts.length&&teamData[en.team]!==undefined){
         teamData[en.team].psychRem+=pts[idx];
