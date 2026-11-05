@@ -1577,7 +1577,7 @@ function renderEventBody(gi){
   // Column headers
   var col3hdr=(mode==='final'&&hasPrelim)?'Prelim&#8594;Final pts':'Psych seed';
   // Finals from prelims: a swimmer can only move within their own final (A 1-8, B 9-16, C 17-24)
-  var lockFin=mode==='final'&&!isTF&&hasPrelim;
+  var lockFin=heatLock(gi,mode);
   h+='<div class="pg" id="pg'+gi+'">';
   h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:44px 1fr 1fr auto auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span title="Check on the LOWER place to indicate a tie with the place above">=&#8593;</span><span>SCR</span><span>DQ</span></div>';
 
@@ -1665,7 +1665,7 @@ function drStart(e,gi,rk){
   var isTF=isTimedFinal(ev),mode=isTF?'final':evMode(gi),d=getLR(gi);
   if(mode==='prelim'&&S.liveResults[gi]&&S.liveResults[gi].prelimLocked)return;
   if(!d[mode].some(function(x){return x&&x.team;})){mkDone(gi,true);d=getLR(gi);}
-  var lock=mode==='final'&&!isTF&&d.prelim.some(function(x){return x&&x.team;});
+  var lock=heatLock(gi,mode);
   var n=mpts(ev.isRelay).length,lo=lock?Math.floor(rk/8)*8:0,hi=lock?Math.min(lo+7,n-1):n-1;
   var pg=document.getElementById('pg'+gi);if(!pg)return;
   var rows={};pg.querySelectorAll('.pr[data-rk]').forEach(function(r){rows[+r.getAttribute('data-rk')]=r;});
@@ -1784,11 +1784,25 @@ function setLR(gi,rk,f,v){
   if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('partial');}
 }
 
+// Places split into finals of 8 that nobody can move between:
+//  - finals swum off prelims (A 1-8, B 9-16, C 17-24)
+//  - UAA relays: every team swims an A and a B relay; A relays are the A final, B relays the B final
+function uaaRelay(ev){return !!ev&&!!ev.isRelay&&S.scoringModel==='uaa';}
+function heatLock(gi,mode){
+  var ev=S.events[gi];if(!ev)return false;
+  if(uaaRelay(ev))return true;
+  return mode==='final'&&!isTimedFinal(ev)&&getLR(gi).prelim.some(function(x){return x&&x.team;});
+}
+function relayLetter(e){var m=String(e.name||'').match(/\s([A-Z])(?:\s+Relay)?$/);return m?m[1]:'';}
+
 // Order "Goes Chalk" fills from: finals use prelim order when there is one, otherwise the psych seeds
 function chalkSrc(gi,mode){
   var ev=S.events[gi],d=getLR(gi);
   if(mode==='final'&&d.prelim.some(function(x){return x&&x.team;}))return d.prelim;
-  return ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
+  var seeds=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+  // UAA relays: all A relays (in seed order) take places 1-8, then the B relays
+  if(uaaRelay(ev))seeds=seeds.filter(function(e){return relayLetter(e)!=='B';}).concat(seeds.filter(function(e){return relayLetter(e)==='B';}));
+  return seeds.map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
 }
 function mkDone(gi,quiet){
   var ev=S.events[gi];if(!ev)return;
