@@ -1906,7 +1906,7 @@ function updFinalsBreakdown(){
     hdr+='<th style="color:#a8a9ac">B</th>';
     hdr+='<th style="color:#c07d3a">C</th>';
   });
-  document.getElementById('lfinhdr').innerHTML=hdr;
+  setHdr('lfinhdr',hdr);
 
   if(!anyEntered){
     document.getElementById('lfinbd').innerHTML='<tr><td colspan="99" style="color:var(--text-dim);text-align:center;padding:1.5rem">No results entered yet.</td></tr>';
@@ -1949,6 +1949,9 @@ function ptsFromRes(res,pts){
   });
   return teamPts;
 }
+
+// Two-row table headers: a <tr> can't hold a second row, so write both rows into the <thead>
+function setHdr(id,h){var tr=document.getElementById(id);if(!tr)return;tr.parentNode.innerHTML='<tr id="'+id+'">'+h+'</tr>';}
 
 function updLiveBreakdown(){
   var home=S.homeTeam;
@@ -2026,7 +2029,7 @@ function updLiveBreakdown(){
     hdr+='<th style="font-size:.6rem;color:var(--green);font-family:var(--fm);padding:.1rem .3rem;text-align:center" title="Best case: first in each final">BC</th>';
     hdr+='<th style="font-size:.6rem;color:var(--gold);font-family:var(--fm);padding:.1rem .3rem;text-align:center;border-right:1px solid var(--border)">FIN</th>';
   });
-  document.getElementById('lebhdr').innerHTML=hdr;
+  setHdr('lebhdr',hdr);
 
   // Data rows
   var bh='';
