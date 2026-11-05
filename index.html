@@ -596,6 +596,13 @@ body.dragging .dh{cursor:grabbing;}
           </table>
         </div>
       </div>
+      <div class="card">
+        <div class="ct" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap">
+          <span>Points by Swimmer</span>
+          <select id="swTeam" onchange="setSwTeam(this.value)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.25rem .4rem;border-radius:4px;font-size:.75rem"></select>
+        </div>
+        <div id="swPts"></div>
+      </div>
       <div id="lev"></div>
       <div class="card" id="meetReportCard" style="display:none">
         <div class="ct" style="display:flex;align-items:center;justify-content:space-between">
@@ -1879,6 +1886,66 @@ function liveScores(){
   return sc;
 }
 
+// ── POINTS BY SWIMMER ────────────────────────────────────────────────────
+// Same scoring as liveScores (finals; timed finals fall back to prelims; ties averaged),
+// credited to each swimmer. Relays are credited to the relay (legs aren't known).
+var SW_TEAM=null;
+function setSwTeam(t){SW_TEAM=t;updSwimmerPts();}
+function liveSwimmerPts(){
+  var out={};
+  Object.keys(S.liveResults).forEach(function(gis){
+    var gi=parseInt(gis),ev=S.events[gi];
+    if(!evOn(ev))return;
+    var pts=mpts(ev.isRelay),d=getLR(gi);
+    var res=d.final.some(function(x){return x&&x.team;})?d.final:(isTimedFinal(ev)?d.prelim:[]);
+    var fin=[];
+    res.forEach(function(x,rk){if(x&&x.team&&!x.scratch&&!x.dq)fin.push({x:x,rk:rk});});
+    var i=0;
+    while(i<fin.length){
+      var rk=fin[i].rk;if(rk>=pts.length)break;
+      var j=i+1;while(j<fin.length&&fin[j].x.tie&&fin[j].rk<pts.length)j++;
+      var sum=0;for(var k=rk;k<Math.min(rk+(j-i),pts.length);k++)sum+=pts[k];
+      var each=sum/(j-i);
+      for(var k2=i;k2<j;k2++){
+        var x=fin[k2].x,nm;
+        if(ev.isRelay){var lt=String(x.name||'').replace(/\s+Relay$/i,'').match(/\s([A-Z])$/);nm=x.team+(lt?' '+lt[1]:'')+' relay';}
+        else nm=x.name||'(no name) '+x.team;
+        var key=x.team+'|'+nm;
+        if(!out[key])out[key]={name:nm,team:x.team,relay:!!ev.isRelay,pts:0,swims:[]};
+        out[key].pts+=each;
+        out[key].swims.push({ev:ev,place:rk+1,pts:each});
+      }
+      i=j;
+    }
+  });
+  return Object.keys(out).map(function(k){return out[k];});
+}
+function updSwimmerPts(){
+  var box=document.getElementById('swPts'),sel=document.getElementById('swTeam');if(!box||!sel)return;
+  if(SW_TEAM===null||(SW_TEAM!=='all'&&S.teams.indexOf(SW_TEAM)<0))SW_TEAM=S.teams.indexOf(S.homeTeam)>=0?S.homeTeam:'all';
+  sel.innerHTML='<option value="all">All teams</option>'+S.teams.map(function(t){return '<option'+(t===SW_TEAM?' selected':'')+'>'+esc(t)+'</option>';}).join('');
+  if(SW_TEAM==='all')sel.value='all';
+  var list=liveSwimmerPts().filter(function(r){return SW_TEAM==='all'||r.team===SW_TEAM;})
+    .sort(function(a,b){return (a.relay-b.relay)||b.pts-a.pts||a.name.localeCompare(b.name);});   // swimmers first, relays after
+  if(!list.length){box.innerHTML='<div style="color:var(--text-dim);font-size:.82rem;padding:.5rem 0">No scored results yet.</div>';return;}
+  function fmt(n){return Math.round(n*10)%10?n.toFixed(1):String(Math.round(n));}
+  function ord(n){var s=['th','st','nd','rd'],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
+  var tot=0,h='<table class="lb" style="width:100%"><thead><tr><th>#</th><th>Swimmer</th>'+(SW_TEAM==='all'?'<th>Team</th>':'')+'<th>Swims</th><th style="text-align:right">Pts</th></tr></thead><tbody>';
+  var rn=0,relHdr=false;
+  list.forEach(function(r){
+    tot+=r.pts;
+    if(r.relay&&!relHdr){relHdr=true;h+='<tr><td colspan="5" style="font-family:var(--fm);font-size:.62rem;letter-spacing:.12em;color:var(--gold);padding-top:.7rem">RELAYS</td></tr>';}
+    var i=r.relay?-1:rn++;
+    var sw=r.swims.sort(function(a,b){return a.ev.num-b.ev.num;}).map(function(s){
+      return '<span style="white-space:nowrap;margin-right:.6rem">'+esc(s.ev.name.replace(/\s*Relay$/i,''))+' <span style="color:var(--text-dim)">'+ord(s.place)+' &middot; '+fmt(s.pts)+'</span></span>';}).join(' ');
+    h+='<tr><td>'+(i<0?'':i+1)+'</td><td style="white-space:nowrap;'+(r.relay?'color:var(--text-dim)':'font-weight:500')+'">'+esc(r.name)+'</td>'
+      +(SW_TEAM==='all'?'<td style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim)">'+esc(r.team)+'</td>':'')
+      +'<td style="font-size:.72rem">'+sw+'</td><td style="text-align:right"><strong>'+fmt(r.pts)+'</strong></td></tr>';
+  });
+  if(SW_TEAM!=='all')h+='<tr><td></td><td><strong>Total</strong></td><td></td><td style="text-align:right"><strong>'+fmt(tot)+'</strong></td></tr>';
+  box.innerHTML=h+'</tbody></table>';
+}
+
 function finalCounts(){
   // Count seed-based final appearances per team across all active events
   var counts={};
@@ -2325,6 +2392,7 @@ function updLB(){
   document.getElementById('ltb').innerHTML=h;
   updLiveBreakdown();
   updFinalsBreakdown();
+  updSwimmerPts();
 }
 
 
