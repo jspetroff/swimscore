@@ -1579,6 +1579,8 @@ function renderEventBody(gi){
     h+='<div style="font-size:.7rem;color:var(--gold);font-family:var(--fm);margin-bottom:.75rem">&#128274; Uploaded prelims &mdash; locked. Set finals order in FINAL.</div>';
   } else if(mode==='prelim'){
     h+='<div style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm);margin-bottom:.75rem">Prelim results &mdash; not scored. Switch to FINAL after the race.</div>';
+  } else if(S.liveResults[gi]&&S.liveResults[gi].finalPending){
+    h+='<div style="font-size:.7rem;color:var(--gold);font-family:var(--fm);margin-bottom:.75rem">Pre-filled from prelims &mdash; not in swimmer totals yet. Drag to set the order, or Score as is.</div>';
   } else {
     h+='<div style="font-size:.7rem;color:var(--green);font-family:var(--fm);margin-bottom:.75rem">&#9654; Final results &mdash; these score points</div>';
   }
@@ -1657,7 +1659,7 @@ function renderEventBody(gi){
   }
   h+='</div>';
 
-  var chalkLabel=(mode==='final'&&hasPrelim)?'&#9654; Chalk from Prelim':'&#9654; Goes Chalk';
+  var chalkLabel=(mode==='final'&&S.liveResults[gi]&&S.liveResults[gi].finalPending)?'&#10003; Score as is':(mode==='final'&&hasPrelim)?'&#9654; Chalk from Prelim':'&#9654; Goes Chalk';
   h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">';
   if(!preLocked)h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">'+chalkLabel+'</button>';
   h+='<button class="btn bsm" onclick="clrEv('+gi+')">'+(preLocked?'Clear prelims (unlocks)':'Clear')+'</button>';
@@ -1720,6 +1722,7 @@ function drEnd(){
     for(var i=0;i<=Math.max(D.from,D.to);i++)if(!arr[i])arr[i]={team:'',scratch:false,tie:false};
     var ties=arr.map(function(x){return !!(x&&x.tie);});
     var item=arr.splice(D.from,1)[0];arr.splice(D.to,0,item);
+    if(D.mode==='final')delete S.liveResults[D.gi].finalPending;
     arr.forEach(function(x,i){if(x)x.tie=ties[i];});
     save();updLB();updClinch();
     var eh=document.getElementById('eh'+D.gi);
@@ -1790,6 +1793,7 @@ function setLR(gi,rk,f,v){
   if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
   if(!S.liveResults[gi][mode][rk])S.liveResults[gi][mode][rk]={};
   if(f==='team'&&S.liveResults[gi][mode][rk].team!==v)S.liveResults[gi][mode][rk].name='';
+  if(mode==='final')delete S.liveResults[gi].finalPending;
   S.liveResults[gi][mode][rk][f]=v;
   save();updLB();updClinch();
   var eh=document.getElementById('eh'+gi);
@@ -1828,6 +1832,7 @@ function mkDone(gi,quiet){
   if(!d||Array.isArray(d))S.liveResults[gi]={prelim:Array.isArray(d)?d:[],final:[]};
   var pts=mpts(ev.isRelay);
   var src=chalkSrc(gi,mode);
+  if(mode==='final')delete S.liveResults[gi].finalPending;   // Goes Chalk / Score as is
   if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
   for(var rk=0;rk<pts.length;rk++){
     if(!S.liveResults[gi][mode][rk]||!S.liveResults[gi][mode][rk].team){
@@ -1846,7 +1851,7 @@ function mkDone(gi,quiet){
 function clrEv(gi){
   var mode=evMode(gi);
   var d=S.liveResults[gi];
-  if(d&&!Array.isArray(d)){d[mode]=[];if(mode==='prelim')delete d.prelimLocked;}
+  if(d&&!Array.isArray(d)){d[mode]=[];if(mode==='prelim')delete d.prelimLocked;else delete d.finalPending;}
   else{delete S.liveResults[gi];}
   save();renderLiveEvs();updLB();updClinch();
 }
@@ -1903,6 +1908,7 @@ function liveSwimmerPts(){
     var gi=parseInt(gis),ev=S.events[gi];
     if(!evOn(ev))return;
     var pts=mpts(ev.isRelay),d=getLR(gi);
+    if(S.liveResults[gi]&&S.liveResults[gi].finalPending)return;     // pre-filled from prelims, not scored yet
     var res=d.final.some(function(x){return x&&x.team;})?d.final:(isTimedFinal(ev)?d.prelim:[]);
     var fin=[];
     res.forEach(function(x,rk){if(x&&x.team&&!x.scratch&&!x.dq)fin.push({x:x,rk:rk});});
@@ -2835,9 +2841,12 @@ function rpApply(){
       S.liveResults[e.gi].prelimLocked=true;
       S.liveMode[e.gi]='final';
       var fin=S.liveResults[e.gi].final||[];
-      if(!fin.some(function(x){return x&&x.team;}))
+      if(!fin.some(function(x){return x&&x.team;})){
         S.liveResults[e.gi].final=arr.slice(0,pts.length).map(function(x){return{team:x.team,name:x.name||'',scratch:false,dq:false,tie:false};});
+        S.liveResults[e.gi].finalPending=true;   // not scored until the order is set (drag, Score, or finals upload)
+      }
     } else if(!isTimedFinal(ev))S.liveMode[e.gi]=e.mode;
+    if(e.mode==='final')delete S.liveResults[e.gi].finalPending;
     placed+=arr.length;
   });
   var n=_rp.evs.length,file=_rp.file;_rp=null;
