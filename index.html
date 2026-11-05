@@ -2562,7 +2562,7 @@ async function rpReadPages(bytes){
   return pages;
 }
 var RP_TIME=/^x?((?:\d+:)?\d+\.\d\d)[A-Za-z*]?$/;
-var RP_YEAR=/^(FR|SO|JR|SR|GS|GR|5Y|6Y|5TH)$/i;
+var RP_YEAR=/^(FR|SO|JR|SR|GS|GR|FY|5Y|6Y|5TH)$/i;   // FY = first-year (Rochester)
 // → {meet, isResults, isPsych, events:[{num, gender, name, mode, rows:[{place, tie, team, exh}]}]}
 function rpParseResults(pages){
   var out={meet:'',isResults:false,isPsych:false,events:[]},cur=null,hdrMode=null;
