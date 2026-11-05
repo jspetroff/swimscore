@@ -220,6 +220,13 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .pr{display:grid;grid-template-columns:32px 1fr 1fr auto;gap:.5rem;align-items:center;}
 .pr select{background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.25rem .4rem;border-radius:4px;font-size:.78rem;}
 .pn{font-family:var(--fm);font-size:.72rem;color:var(--text-dim);text-align:center;}
+.dh{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:.3rem .25rem;margin:-.3rem 0 -.3rem -.25rem;color:var(--text-dim);font-size:.85rem;line-height:1;}
+.dh:hover{color:var(--gold);}
+.dh0{opacity:.15;cursor:default;}
+.pr.drg{position:relative;z-index:5;background:var(--bg3);box-shadow:0 4px 14px rgba(0,0,0,.45);border-radius:4px;}
+.pr.drt{box-shadow:inset 0 0 0 1px var(--gold);border-radius:4px;}
+.pr.dro{opacity:.35;}
+.pr.prg{border-top:1px dashed var(--border);padding-top:.35rem;margin-top:.2rem;}
 .sc{display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--text-dim);}
 
 /* Clinch banner */
@@ -1556,8 +1563,10 @@ function renderEventBody(gi){
 
   // Column headers
   var col3hdr=(mode==='final'&&hasPrelim)?'Prelim&#8594;Final pts':'Psych seed';
-  h+='<div class="pg">';
-  h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:32px 1fr 1fr auto auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span title="Check on the LOWER place to indicate a tie with the place above">=&#8593;</span><span>SCR</span><span>DQ</span></div>';
+  // Finals from prelims: a swimmer can only move within their own final (A 1-8, B 9-16, C 17-24)
+  var lockFin=mode==='final'&&!isTF&&hasPrelim;
+  h+='<div class="pg" id="pg'+gi+'">';
+  h+='<div class="pr" style="font-family:var(--fm);font-size:.65rem;color:var(--text-dim);grid-template-columns:44px 1fr 1fr auto auto auto"><span>PL</span><span>Result</span><span>'+col3hdr+'</span><span title="Check on the LOWER place to indicate a tie with the place above">=&#8593;</span><span>SCR</span><span>DQ</span></div>';
 
   for(var rk=0;rk<pts.length;rk++){
     var r=res[rk]||{};
@@ -1614,9 +1623,13 @@ function renderEventBody(gi){
     } else {
       refCell='<span style="color:var(--text-dim);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ps.team||'—')+'</span>';
     }
-    h+='<div class="pr" style="grid-template-columns:32px 1fr 1fr auto auto auto">';
-    h+='<span class="pn" style="'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'+(rk+1)+(r.dq?' DQ':'')+'</span>';
-    h+='<select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>';
+    var grpBreak=lockFin&&rk>0&&rk%8===0;
+    h+='<div class="pr'+(grpBreak?' prg':'')+'" data-rk="'+rk+'" style="grid-template-columns:44px 1fr 1fr auto auto auto">';
+    h+='<span class="pn" style="display:flex;align-items:center;gap:.3rem;'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'
+      +(tm?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
+      +(rk+1)+(r.dq?' DQ':'')+'</span>';
+    h+='<div style="min-width:0;display:flex;flex-direction:column;gap:.1rem"><select onchange="setLR('+gi+','+rk+',\'team\',this.value)">'+opts+'</select>'
+      +(tm&&r.name?'<span style="font-size:.68rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.name)+'</span>':'')+'</div>';
     h+=refCell;
     h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
     h+='<label class="sc"><input type="checkbox" '+sc2+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
@@ -1629,9 +1642,58 @@ function renderEventBody(gi){
   h+='<div style="margin-top:.8rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">';
   h+='<button class="btn bsm bprimary" onclick="mkDone('+gi+')">'+chalkLabel+'</button>';
   h+='<button class="btn bsm" onclick="clrEv('+gi+')">Clear</button>';
-  h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">=&#8593; check on LOWER place to tie with place above &middot; SCR = scratch &middot; DQ = disqualified</span>';
+  h+='<span style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm)">&#9776; drag to reorder'+(lockFin?' (within each final)':'')+' &middot; =&#8593; check on LOWER place to tie with place above &middot; SCR = scratch &middot; DQ = disqualified</span>';
   h+='</div>';
   eb.innerHTML=h;
+}
+
+// ── DRAG TO REORDER (mouse + touch) ─────────────────────────────────────
+// Ties stay with the place (they mean "tied with the place above"); scratch/DQ move with the swimmer.
+var _dr=null;
+function drStart(e,gi,rk){
+  e.preventDefault();
+  var ev=S.events[gi];if(!ev)return;
+  var isTF=isTimedFinal(ev),mode=isTF?'final':evMode(gi),d=getLR(gi);
+  var lock=mode==='final'&&!isTF&&d.prelim.some(function(x){return x&&x.team;});
+  var n=mpts(ev.isRelay).length,lo=lock?Math.floor(rk/8)*8:0,hi=lock?Math.min(lo+7,n-1):n-1;
+  var pg=document.getElementById('pg'+gi);if(!pg)return;
+  var rows=[].slice.call(pg.querySelectorAll('.pr[data-rk]'));
+  var row=rows.find(function(r){return +r.getAttribute('data-rk')===rk;});if(!row)return;
+  _dr={gi:gi,from:rk,to:rk,lo:lo,hi:hi,mode:mode,rows:rows,row:row,y0:e.clientY,el:e.target};
+  row.classList.add('drg');
+  try{e.target.setPointerCapture(e.pointerId);}catch(x){}
+  e.target.addEventListener('pointermove',drMove);
+  e.target.addEventListener('pointerup',drEnd);
+  e.target.addEventListener('pointercancel',drEnd);
+}
+function drMove(e){
+  if(!_dr)return;
+  _dr.row.style.transform='translateY('+(e.clientY-_dr.y0)+'px)';
+  var to=_dr.from;
+  _dr.rows.forEach(function(r){
+    var k=+r.getAttribute('data-rk');if(k<_dr.lo||k>_dr.hi||r===_dr.row)return;
+    var b=r.getBoundingClientRect(),mid=b.top+b.height/2;
+    if(k<_dr.from&&e.clientY<mid&&k<to)to=k;
+    if(k>_dr.from&&e.clientY>mid&&k>to)to=k;
+  });
+  _dr.to=to;
+  _dr.rows.forEach(function(r){var k=+r.getAttribute('data-rk');r.classList.toggle('drt',k===to&&to!==_dr.from);r.classList.toggle('dro',k<_dr.lo||k>_dr.hi);});
+}
+function drEnd(){
+  if(!_dr)return;
+  var D=_dr;_dr=null;
+  D.el.removeEventListener('pointermove',drMove);D.el.removeEventListener('pointerup',drEnd);D.el.removeEventListener('pointercancel',drEnd);
+  if(D.to!==D.from){
+    var arr=S.liveResults[D.gi][D.mode];
+    for(var i=0;i<=Math.max(D.from,D.to);i++)if(!arr[i])arr[i]={team:'',scratch:false,tie:false};
+    var ties=arr.map(function(x){return !!(x&&x.tie);});
+    var item=arr.splice(D.from,1)[0];arr.splice(D.to,0,item);
+    arr.forEach(function(x,i){if(x)x.tie=ties[i];});
+    save();updLB();updClinch();
+    var eh=document.getElementById('eh'+D.gi);
+    if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('partial');}
+  }
+  renderEventBody(D.gi);
 }
 
 function getLR(gi){
@@ -1695,6 +1757,7 @@ function setLR(gi,rk,f,v){
   if(!d||Array.isArray(d))S.liveResults[gi]={prelim:Array.isArray(d)?d:[],final:[]};
   if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
   if(!S.liveResults[gi][mode][rk])S.liveResults[gi][mode][rk]={};
+  if(f==='team'&&S.liveResults[gi][mode][rk].team!==v)S.liveResults[gi][mode][rk].name='';
   S.liveResults[gi][mode][rk][f]=v;
   save();updLB();updClinch();
   var eh=document.getElementById('eh'+gi);
@@ -1713,14 +1776,14 @@ function mkDone(gi){
     var pr=S.liveResults[gi].prelim||[];
     var hasPrelim=pr.some(function(x){return x&&x.team;});
     if(hasPrelim){src=pr;}
-    else{src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,scratch:false,tie:false};});}
+    else{src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});}
   } else {
-    src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,scratch:false,tie:false};});
+    src=ev.entries.slice().sort(function(a,b){return a.seedPlace-b.seedPlace;}).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
   }
   if(!S.liveResults[gi][mode])S.liveResults[gi][mode]=[];
   for(var rk=0;rk<pts.length;rk++){
     if(!S.liveResults[gi][mode][rk]||!S.liveResults[gi][mode][rk].team){
-      S.liveResults[gi][mode][rk]=src[rk]?{team:src[rk].team,scratch:false,tie:false}:{team:'',scratch:false,tie:false};
+      S.liveResults[gi][mode][rk]=src[rk]?{team:src[rk].team,name:src[rk].name||'',scratch:false,tie:false}:{team:'',scratch:false,tie:false};
     }
   }
   save();
@@ -2532,15 +2595,15 @@ function rpParseResults(pages){
         var res=t.filter(function(x){return RP_TIME.test(x);});
         var last=res.length?res[res.length-1]:'';
         if(dq||!last)return;                                         // DQ / NS / scratch: no place
-        var team;
-        if(/Relay/i.test(cur.name)){team=t[1];}                      // "1 Emory University A 1:33.08 1:32.77"
+        var team,who='';
+        if(/Relay/i.test(cur.name)){team=t[1];who=team+(/^[A-F]$/.test(t[2]||'')?' '+t[2]:'');}   // "1 Emory University A 1:33.08 1:32.77"
         else{
           if(!/,/.test(t[1]||''))return;                             // "<place> Last, First YR Team ..."
           var k=2;if(t[k]&&(RP_YEAR.test(t[k])||/^\d{1,2}$/.test(t[k])))k++;   // class year or age
-          team=t[k];
+          team=t[k];who=t[1];
         }
         if(!team||RP_TIME.test(team))return;
-        cur.rows.push({place:+pm[2],tie:!!pm[1],team:team,exh:/^x/.test(last)});
+        cur.rows.push({place:+pm[2],tie:!!pm[1],team:team,name:who,exh:/^x/.test(last)});
       });
     });
   });
@@ -2625,7 +2688,7 @@ function rpApply(){
       if(r.exh)return;
       var team=rpMatchTeam(r.team);if(!team)return;               // not in this meet / left out
       if(arr.length>=cap)return;
-      arr.push({team:team,scratch:false,dq:false,tie:!!(prev&&prev.place===r.place)});
+      arr.push({team:team,name:r.name||'',scratch:false,dq:false,tie:!!(prev&&prev.place===r.place)});
       prev=r;
     });
     var d=S.liveResults[e.gi];
