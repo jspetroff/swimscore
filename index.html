@@ -1743,7 +1743,7 @@ function statusLabel(gi){
   var ev=S.events[gi];
   var isTF=ev&&isTimedFinal(ev);
   var hasPrelim=d.prelim.some(function(x){return x&&x.team;});
-  var hasFinal=d.final.some(function(x){return x&&x.team;});
+  var hasFinal=d.final.some(function(x){return x&&x.team;})&&!isPending(gi);
   if(isTF)return hasFinal?'\u2713 done':'pending';
   if(hasFinal&&hasPrelim)return'\u2713 prelim \u00b7 \u2713 final';
   if(hasPrelim)return'prelim \u2713 \u00b7 final pending';
@@ -1762,7 +1762,7 @@ function renderLiveEvs(){
     var pts=mpts(ev.isRelay);
     var entries=psychOrder(ev);
     var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
-    var hasFinal=d.final.some(function(x){return x&&x.team;});
+    var hasFinal=d.final.some(function(x){return x&&x.team;})&&!isPending(gi);
     var hasAny=hasPrelim||hasFinal;
     var stcls=hasFinal?'done':hasAny?'partial':'pending';
     var tagcls=ev.isRelay?'tgr':isDiving(ev)?'tgd':'tgi';
@@ -1857,12 +1857,15 @@ function clrEv(gi){
 }
 
 
+// Finals pre-filled from a prelims upload don't count anywhere until the event is scored
+function isPending(gi){var d=S.liveResults[gi];return !!(d&&!Array.isArray(d)&&d.finalPending);}
+
 function liveScores(){
   var sc={};
   S.activeTeams.forEach(function(t){sc[t]=0;});
   Object.keys(S.liveResults).forEach(function(gis){
     var gi=parseInt(gis),ev=S.events[gi];
-    if(!evOn(ev))return;
+    if(!evOn(ev)||isPending(gi))return;
     var pts=mpts(ev.isRelay);
     var d=S.liveResults[gi];
     // Score from final; for timed finals fall back to prelim if final is empty
@@ -2097,7 +2100,7 @@ function updLiveBreakdown(){
     var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
     var prelimPts=hasPrelim?ptsFromRes(prelimRes,pts):{};
     // Final (or prelim for timed finals)
-    var finalRes=d.final&&d.final.some(function(x){return x&&x.team;})?d.final:
+    var finalRes=isPending(gi)?[]:d.final&&d.final.some(function(x){return x&&x.team;})?d.final:
                  (isTF&&hasPrelim?d.prelim:[]);
     var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;});
     var finalPts=hasFinal?ptsFromRes(finalRes,pts):{};
@@ -2234,7 +2237,7 @@ function buildMeetReportData(){
     var d=getLR(gi);
     var isTF=isTimedFinal(ev);
     var finalRes=Array.isArray(d)?d:((d.final&&d.final.some(function(x){return x&&x.team;}))?d.final:(isTF?(d.prelim||[]):(d.final||[])));
-    var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;});
+    var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;})&&!isPending(gi);
     if(!hasFinal)return;
 
     var evPts=mpts(ev.isRelay);
@@ -2433,7 +2436,7 @@ function updProjection(){
   Object.keys(S.liveResults).forEach(function(gi){
     var d=S.liveResults[gi];
     var finalRes=Array.isArray(d)?d:(d&&d.final||[]);
-    if(finalRes.some(function(x){return x&&x.team;}))done[parseInt(gi)]=1;
+    if(finalRes.some(function(x){return x&&x.team;})&&!isPending(gi))done[parseInt(gi)]=1;
   });
   var completedEvs=allEvs.filter(function(ev){return done[S.events.indexOf(ev)];});
   var remainingEvs=allEvs.filter(function(ev){return!done[S.events.indexOf(ev)];});
@@ -2519,7 +2522,7 @@ function updClinch(){
   Object.keys(S.liveResults).forEach(function(gi){
     var d=S.liveResults[gi];
     var finalRes=Array.isArray(d)?d:(d&&d.final||[]);
-    if(finalRes.some(function(x){return x&&x.team;}))done[parseInt(gi)]=1;
+    if(finalRes.some(function(x){return x&&x.team;})&&!isPending(gi))done[parseInt(gi)]=1;
   });
   var rem=actEvs('full').filter(function(ev){return!done[S.events.indexOf(ev)];});
   var avail=0;rem.forEach(function(ev){var p=mpts(ev.isRelay);avail+=p[0]||0;});
