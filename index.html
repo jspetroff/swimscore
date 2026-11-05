@@ -2516,6 +2516,10 @@ function updClinch(){
   function f1(n){return Math.round(n*10)%10?n.toFixed(1):String(Math.round(n));}
   var msg;
   if(!all.some(function(x){return x.pts;})){msg='&#9203; Nothing scored yet';el.className='cb cn';}
+  else if(all.filter(function(x){return x.pts===all[0].pts;}).length>1&&hs===all[0].pts){
+    // tied for 1st: name the team(s) level with us
+    var tied=all.filter(function(x){return x.pts===hs&&x.team!==home;}).map(function(x){return esc(x.team);});
+    msg='&#128993; '+esc(home)+' is tied with '+tied.join(', ')+' for 1st ('+f1(hs)+' pts)';el.className='cb cn';}
   else if(rank===1){var nx=all[1]||{team:'—',pts:0};msg='&#128994; '+esc(home)+' leads '+esc(nx.team)+' by '+f1(hs-nx.pts)+' pts';el.className='cb cn';}
   else{var ld=all[0];msg='&#128308; '+esc(home)+' is '+rank+(rank===2?'nd':rank===3?'rd':'th')+', '+f1(ld.pts-hs)+' pts behind '+esc(ld.team);el.className='cb cl2';}
   el.innerHTML=msg;
