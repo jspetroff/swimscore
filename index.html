@@ -11,7 +11,7 @@
   import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
   import { getAuth, signInWithPopup, signOut, GoogleAuthProvider, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-  const AUTHORIZED_EMAIL = "jspetroff@gmail.com";
+  const AUTHORIZED_EMAILS = ["jspetroff@gmail.com", "emoryswimminganddiving@gmail.com"];
 
   const firebaseConfig = {
     apiKey: "AIzaSyALXznGsNQaeNOGmwG5EHOa0XONWy6EZfA",
@@ -46,7 +46,7 @@
   };
 
   onAuthStateChanged(auth, function(user) {
-    if (user && user.email === AUTHORIZED_EMAIL) {
+    if (user && AUTHORIZED_EMAILS.includes((user.email || '').toLowerCase())) {
       // Authorized — show app, hide login screen
       window._fbReady = true;
       window._currentUser = user;
@@ -61,7 +61,7 @@
       // Wrong account
       document.getElementById('loginScreen').style.display = 'flex';
       document.getElementById('appRoot').style.display = 'none';
-      document.getElementById('loginMsg').textContent = user.email + ' is not authorized. Sign in with jspetroff@gmail.com.';
+      document.getElementById('loginMsg').textContent = user.email + ' is not authorized for SwimScore.';
       signOut(auth);
     } else {
       // Not signed in
@@ -79,6 +79,11 @@
   --fm:'SF Mono',Monaco,monospace;--fd:'Inter',sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
+/* Module switch (shared by SwimScore and EagleRoster) */
+.modsw{display:flex;gap:.25rem;padding:.375rem;background:var(--bg);border-bottom:1px solid var(--border);}
+.modsw a{flex:1;text-align:center;padding:.45rem .5rem;border-radius:6px;font-family:var(--fm);font-size:.72rem;letter-spacing:.08em;color:var(--text-dim);text-decoration:none;}
+.modsw a:hover{color:var(--text);background:var(--bg3);}
+.modsw a.act{background:var(--bg2);color:var(--gold);border:1px solid var(--border);}
 /* Login screen */
 #loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:1.5rem;padding:2rem;}
 .login-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:2.5rem;text-align:center;max-width:360px;width:100%;}
@@ -308,6 +313,7 @@ body.dragging .dh{cursor:grabbing;}
 </div>
 <!-- App (hidden until authenticated) -->
 <div id="appRoot" style="display:none">
+<nav class="modsw" aria-label="Modules"><a href="/roster/">EAGLEROSTER</a><a href="/" class="act">SWIMSCORE</a></nav>
 
 <div class="hdr">
   <div class="logo">&#9652; SWIMSCORE</div>
