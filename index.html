@@ -168,12 +168,15 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .lb tr:last-child td{border-bottom:none;}
 .lb tr.ht td{background:rgba(201,168,76,.06);}
 /* Column widths for fixed-layout tables */
-.lb-fixed col.lbc-rk{width:36px;}
+.lb-fixed col.lbc-rk{width:32px;}
 .lb-fixed col.lbc-nm{width:auto;}
-.lb-fixed col.lbc-pt{width:64px;}
-.lb-fixed col.lbc-fin{width:44px;}
+.lb-fixed col.lbc-pt{width:60px;}
+.lb-fixed col.lbc-gap{width:64px;}
+.lb-fixed col.lbc-fin{width:34px;}
+@media (max-width:520px){.lb-fixed col.lbc-rk{width:28px;}.lb-fixed col.lbc-pt{width:54px;}.lb-fixed col.lbc-gap{width:56px;}.lb-fixed col.lbc-fin{width:26px;}
+  .lb-fixed th,.lb-fixed td{padding-left:.3rem;padding-right:.3rem;}}
 /* Team name cell wraps on mobile */
-.lb td.lbtm{word-break:break-word;font-size:.8rem;}
+.lb td.lbtm{overflow-wrap:anywhere;font-size:.8rem;}
 /* Gap column in clinch table */
 .lb td.lbgap{white-space:nowrap;font-size:.75rem;}
 .rb{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:.65rem;font-weight:700;font-family:var(--fm);}
@@ -532,12 +535,12 @@ body.dragging .dh{cursor:grabbing;}
         <div id="clinch" class="cb cn">Loading...</div>
         <div style="max-height:520px;overflow-y:auto;margin-top:.75rem">
           <table class="lb lb-fixed" style="border-collapse:collapse">
-            <colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col style="width:96px"><col class="lbc-fin"><col class="lbc-fin"><col class="lbc-fin"></colgroup>
+            <colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col class="lbc-gap"><col class="lbc-fin"><col class="lbc-fin"><col class="lbc-fin"></colgroup>
             <thead><tr>
               <th style="position:sticky;top:0;background:var(--bg2);z-index:1">#</th>
               <th style="position:sticky;top:0;background:var(--bg2);z-index:1">Team</th>
               <th style="position:sticky;top:0;background:var(--bg2);z-index:1">Pts</th>
-              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" id="lbGapHdr" title="Home team ahead (+) or behind (&minus;) this team">vs Home</th>
+              <th style="position:sticky;top:0;background:var(--bg2);z-index:1" id="lbGapHdr" title="Home team ahead (+) or behind (&minus;) this team">vs Us</th>
               <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="A Final swims (places 1-8)">A</th>
               <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="B Final swims (places 9-16)">B</th>
               <th style="position:sticky;top:0;background:var(--bg2);z-index:1" title="C Final swims (places 17-24)">C</th>
@@ -2378,7 +2381,7 @@ function updLB(){
   var sc=liveScores(),home=S.homeTeam;
   var fc=finalCounts();
   var rows=Object.keys(sc).map(function(t){return[t,sc[t]];}).sort(function(a,b){return b[1]-a[1];});
-  var hs=sc[home]||0,hh=document.getElementById('lbGapHdr');if(hh)hh.textContent='vs '+home;
+  var hs=sc[home]||0,hh=document.getElementById('lbGapHdr');if(hh){hh.textContent='vs Us';hh.title=home+' ahead (+) or behind (\u2212) this team';}
   function f1(n){return Math.round(n*10)%10?n.toFixed(1):String(Math.round(n));}
   var h='';
   rows.forEach(function(row,i){
@@ -2469,7 +2472,7 @@ function updProjection(){
       +Math.round(pctDone*100)+'% complete</div>';
 
   h+='<table class="lb lb-fixed" style="border-collapse:collapse;width:100%">'
-    +'<colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col style="width:80px"><col style="width:80px"></colgroup>'
+    +'<colgroup><col class="lbc-rk"><col class="lbc-nm"><col class="lbc-pt"><col class="lbc-gap"><col class="lbc-gap"></colgroup>'
     +'<thead style="position:sticky;top:0;background:var(--bg2);z-index:1"><tr>'
     +'<th>#</th><th>Team</th>'
     +'<th title="Current scored points">Now</th>'
@@ -2505,6 +2508,7 @@ function updClinch(){
   else if(rank===1){var nx=all[1]||{team:'—',pts:0};msg='&#128994; '+esc(home)+' leads '+esc(nx.team)+' by '+f1(hs-nx.pts)+' pts';el.className='cb cn';}
   else{var ld=all[0];msg='&#128308; '+esc(home)+' is '+rank+(rank===2?'nd':rank===3?'rd':'th')+', '+f1(ld.pts-hs)+' pts behind '+esc(ld.team);el.className='cb cl2';}
   el.innerHTML=msg;
+  updProjection();
 }
 
 // ── MEET MANAGER UI ───────────────────────────────────────────────────────
