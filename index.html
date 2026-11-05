@@ -223,11 +223,13 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 .dh{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;padding:.3rem .25rem;margin:-.3rem 0 -.3rem -.25rem;color:var(--text-dim);font-size:.85rem;line-height:1;}
 .dh:hover{color:var(--gold);}
 .dh0{opacity:.15;cursor:default;}
-.pr.drg{position:relative;z-index:5;background:var(--bg3);box-shadow:0 4px 14px rgba(0,0,0,.45);border-radius:4px;}
-.pr.drt{box-shadow:inset 0 0 0 1px var(--gold);border-radius:4px;}
-.pr.dro{opacity:.35;}
-.pr[data-rk]{min-height:32px;}
-.pr.prg{border-top:1px dashed var(--border);padding-top:.35rem;margin-top:.2rem;}
+.pr.drg{position:relative;z-index:5;background:var(--bg3);box-shadow:0 6px 18px rgba(0,0,0,.5);border-radius:4px;}
+.pr.drs{transition:transform .15s ease;}
+.pr.dro{opacity:.3;}
+body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing;}
+body.dragging .dh{cursor:grabbing;}
+.hl{font-family:var(--fm);font-size:.62rem;letter-spacing:.12em;color:var(--gold);padding:.15rem 0 .1rem;}
+.hl.hlb{border-top:1px dashed var(--border);margin-top:.35rem;padding-top:.45rem;}
 .sc{display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--text-dim);}
 
 /* Clinch banner */
@@ -1615,15 +1617,15 @@ function renderEventBody(gi){
     } else {
       refCell='<span style="color:var(--text-dim);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ps.team||'—')+'</span>';
     }
-    var grpBreak=lockFin&&rk>0&&rk%8===0;
-    h+='<div class="pr'+(grpBreak?' prg':'')+'" data-rk="'+rk+'" style="grid-template-columns:44px 1fr 1fr auto auto auto">';
+    if(lockFin&&rk%8===0)h+='<div class="hl'+(rk>0?' hlb':'')+'">'+'ABC'.charAt(rk/8)+' FINAL</div>';
+    h+='<div class="pr" data-rk="'+rk+'" style="grid-template-columns:44px 1fr 1fr auto auto auto">';
     h+='<span class="pn" style="display:flex;align-items:center;gap:.3rem;'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'
       +(tm?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
       +(rk+1)+(r.dq?' DQ':'')+'</span>';
     // Swimmer name first (what you match to the scoreboard), team beside it; reorder by dragging
     h+='<div class="rw" style="min-width:0;display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
-      +(tm?(r.name?'<span style="font-size:.8rem;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.68rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
-              :'<span style="font-size:.8rem;color:var(--text)">'+esc(tm)+'</span>')
+      +(tm?(r.name?'<span style="font-size:.95rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
+              :'<span style="font-size:.95rem;font-weight:500;color:var(--text)">'+esc(tm)+'</span>')
           :'<span style="color:var(--text-dim);font-size:.75rem">—</span>')+'</div>';
     h+=refCell;
     h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
@@ -1645,39 +1647,50 @@ function renderEventBody(gi){
 // ── DRAG TO REORDER (mouse + touch) ─────────────────────────────────────
 // Ties stay with the place (they mean "tied with the place above"); scratch/DQ move with the swimmer.
 var _dr=null;
+// Rows slide out of the way as you drag; the dragged row can't leave its final (A 1-8, B 9-16, C 17-24).
 function drStart(e,gi,rk){
+  if(_dr)return;
   e.preventDefault();
   var ev=S.events[gi];if(!ev)return;
   var isTF=isTimedFinal(ev),mode=isTF?'final':evMode(gi),d=getLR(gi);
   var lock=mode==='final'&&!isTF&&d.prelim.some(function(x){return x&&x.team;});
   var n=mpts(ev.isRelay).length,lo=lock?Math.floor(rk/8)*8:0,hi=lock?Math.min(lo+7,n-1):n-1;
   var pg=document.getElementById('pg'+gi);if(!pg)return;
-  var rows=[].slice.call(pg.querySelectorAll('.pr[data-rk]'));
-  var row=rows.find(function(r){return +r.getAttribute('data-rk')===rk;});if(!row)return;
-  _dr={gi:gi,from:rk,to:rk,lo:lo,hi:hi,mode:mode,rows:rows,row:row,y0:e.clientY,el:e.target};
-  row.classList.add('drg');
-  try{e.target.setPointerCapture(e.pointerId);}catch(x){}
-  e.target.addEventListener('pointermove',drMove);
-  e.target.addEventListener('pointerup',drEnd);
-  e.target.addEventListener('pointercancel',drEnd);
+  var rows={};pg.querySelectorAll('.pr[data-rk]').forEach(function(r){rows[+r.getAttribute('data-rk')]=r;});
+  // only rows that hold a swimmer can be swapped with
+  while(hi>lo&&!(S.liveResults[gi][mode][hi]||{}).team)hi--;
+  var top={};for(var k=lo;k<=hi;k++)if(rows[k])top[k]=rows[k].getBoundingClientRect().top;
+  var step=hi>lo?(top[hi]-top[lo])/(hi-lo):rows[rk].getBoundingClientRect().height;
+  _dr={gi:gi,from:rk,to:rk,lo:lo,hi:hi,mode:mode,rows:rows,top:top,step:step,y0:e.clientY,el:e.currentTarget||e.target,pid:e.pointerId};
+  rows[rk].classList.add('drg');
+  for(var k2=lo;k2<=hi;k2++)if(rows[k2]&&k2!==rk)rows[k2].classList.add('drs');
+  Object.keys(rows).forEach(function(k3){k3=+k3;if(k3<lo||k3>hi)rows[k3].classList.add('dro');});
+  document.body.classList.add('dragging');
+  try{_dr.el.setPointerCapture(e.pointerId);}catch(x){}
+  _dr.el.addEventListener('pointermove',drMove);
+  _dr.el.addEventListener('pointerup',drEnd);
+  _dr.el.addEventListener('pointercancel',drEnd);
+  _dr.el.addEventListener('lostpointercapture',drEnd);
 }
 function drMove(e){
-  if(!_dr)return;
-  _dr.row.style.transform='translateY('+(e.clientY-_dr.y0)+'px)';
-  var to=_dr.from;
-  _dr.rows.forEach(function(r){
-    var k=+r.getAttribute('data-rk');if(k<_dr.lo||k>_dr.hi||r===_dr.row)return;
-    var b=r.getBoundingClientRect(),mid=b.top+b.height/2;
-    if(k<_dr.from&&e.clientY<mid&&k<to)to=k;
-    if(k>_dr.from&&e.clientY>mid&&k>to)to=k;
-  });
-  _dr.to=to;
-  _dr.rows.forEach(function(r){var k=+r.getAttribute('data-rk');r.classList.toggle('drt',k===to&&to!==_dr.from);r.classList.toggle('dro',k<_dr.lo||k>_dr.hi);});
+  var D=_dr;if(!D)return;
+  e.preventDefault();
+  var dy=e.clientY-D.y0,min=D.top[D.lo]-D.top[D.from],max=D.top[D.hi]-D.top[D.from];
+  dy=Math.max(min,Math.min(max,dy));
+  D.rows[D.from].style.transform='translateY('+dy+'px)';
+  var to=Math.max(D.lo,Math.min(D.hi,D.from+Math.round(dy/D.step)));
+  if(to===D.to)return;
+  D.to=to;
+  for(var k=D.lo;k<=D.hi;k++){
+    if(k===D.from||!D.rows[k])continue;
+    var sh=(k>D.from&&k<=to)?-D.step:(k<D.from&&k>=to)?D.step:0;
+    D.rows[k].style.transform=sh?'translateY('+sh+'px)':'';
+  }
 }
 function drEnd(){
-  if(!_dr)return;
-  var D=_dr;_dr=null;
-  D.el.removeEventListener('pointermove',drMove);D.el.removeEventListener('pointerup',drEnd);D.el.removeEventListener('pointercancel',drEnd);
+  var D=_dr;if(!D)return;_dr=null;
+  ['pointermove','pointerup','pointercancel','lostpointercapture'].forEach(function(t){D.el.removeEventListener(t,t==='pointermove'?drMove:drEnd);});
+  document.body.classList.remove('dragging');
   if(D.to!==D.from){
     var arr=S.liveResults[D.gi][D.mode];
     for(var i=0;i<=Math.max(D.from,D.to);i++)if(!arr[i])arr[i]={team:'',scratch:false,tie:false};
