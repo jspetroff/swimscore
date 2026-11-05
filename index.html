@@ -2591,7 +2591,8 @@ function rpParseResults(pages){
         if(h){
           var num=+h[1],g=/^(Women|Girls)/i.test(h[2])?'Women':/^(Men|Boys)/i.test(h[2])?'Men':'Mixed';
           if(cur&&cur.num===num&&cur.gender===g)return;              // continuation heading
-          cur={num:num,gender:g,name:h[3].replace(/\s*-?\s*Time Trial\s*$/i,'').trim(),mode:null,rows:[]};
+          // Time trials and swim-offs aren't scored — keep them out so they can't overwrite the real event
+          cur={num:num,gender:g,name:h[3].replace(/\s*-?\s*Time Trial\s*$/i,'').trim(),mode:null,rows:[],skip:/Time Trial|Swim-?off/i.test(h[3])};
           out.events.push(cur);hdrMode=null;return;
         }
         if(!cur)return;
@@ -2619,7 +2620,8 @@ function rpParseResults(pages){
       });
     });
   });
-  out.events=out.events.filter(function(e){return e.rows.length;});
+  out.skipped=out.events.filter(function(e){return e.skip&&e.rows.length;}).map(function(e){return e.gender+' '+e.name+' (time trial/swim-off)';});
+  out.events=out.events.filter(function(e){return e.rows.length&&!e.skip;});
   return out;
 }
 
@@ -2664,7 +2666,7 @@ async function rpUpload(file){
       evs.push({pe:pe,gi:gi,mode:mode});
       pe.rows.forEach(function(r){if(!r.exh&&rpMatchTeam(r.team)===null)teamsMiss[r.team]=1;});
     });
-    _rp={file:file.name,meet:res.meet,evs:evs,noEvent:noEvent,miss:Object.keys(teamsMiss)};
+    _rp={file:file.name,meet:res.meet,evs:evs,noEvent:noEvent,skipped:res.skipped||[],miss:Object.keys(teamsMiss)};
     rpRenderPreview();
   }catch(e){st.innerHTML='<div class="st err">'+esc(e.message)+'</div>';_rp=null;}
 }
@@ -2674,6 +2676,7 @@ function rpRenderPreview(){
   var h='<div style="font-size:.78rem;margin:.5rem 0">'+esc(_rp.file)+(_rp.meet?' · '+esc(_rp.meet):'')+' — <b>'+_rp.evs.length+' event'+(_rp.evs.length===1?'':'s')+'</b>: '+
     _rp.evs.map(function(e){var ev=S.events[e.gi];return 'E'+ev.num+' '+esc(ev.gender[0]+' '+ev.name)+' <span style="color:var(--text-dim)">('+e.mode+')</span>';}).join(', ')+'</div>';
   if(_rp.noEvent.length)h+='<div class="st err" style="margin-bottom:.5rem">Not in this meet\'s events, skipped: '+_rp.noEvent.map(esc).join(', ')+'</div>';
+  if(_rp.skipped&&_rp.skipped.length)h+='<div style="font-size:.72rem;color:var(--text-dim);margin-bottom:.5rem">Not scored, skipped: '+_rp.skipped.map(esc).join(', ')+'</div>';
   if(_rp.miss.length){
     h+='<div style="font-size:.75rem;color:var(--gold);margin-bottom:.35rem">Match these team names to the psych sheet:</div>';
     _rp.miss.forEach(function(n,i){
