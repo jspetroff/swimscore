@@ -2087,34 +2087,27 @@ function updLiveBreakdown(){
                  (isTF&&hasPrelim?d.prelim:[]);
     var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;});
     var finalPts=hasFinal?ptsFromRes(finalRes,pts):{};
-    // Worst case: prelim done, final not yet — each team scores last place in their final tier
-    var wcPts={};
+    // Worst / best case once prelims are in: a team's swimmers in the same final take the bottom
+    // places of that final (worst) or the top places (best). Three NYU A finalists: worst 6th+7th+8th,
+    // best 1st+2nd+3rd — the same total as if they tied and split those points.
+    var wcPts={},bcPts={};
     if(hasPrelim&&!isTF){
-      // Determine each finisher's final tier from prelim place
       var nonScr=[];
       prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq)nonScr.push(x.team);});
+      var tiers={};                                   // tier index -> {team: count}
       nonScr.forEach(function(t,idx){
-        // idx 0-7 = A final (last place = 7 = pts[7]), 8-15 = B final (last = 15 = pts[15]), 16-23 = C
-        var lastInFinal;
-        if(idx<8)lastInFinal=Math.min(7,pts.length-1);
-        else if(idx<16)lastInFinal=Math.min(15,pts.length-1);
-        else lastInFinal=Math.min(23,pts.length-1);
-        if(!wcPts[t])wcPts[t]=0;
-        wcPts[t]+=(pts[lastInFinal]||0);
+        if(idx>=pts.length)return;                    // didn't make a scoring final
+        var ti=Math.floor(idx/8);(tiers[ti]=tiers[ti]||{})[t]=((tiers[ti]||{})[t]||0)+1;
       });
-    }
-    // Best case: prelim done, final not yet — each team scores first place in their final tier
-    var bcPts={};
-    if(hasPrelim&&!isTF){
-      var nonScrBC=[];
-      prelimRes.forEach(function(x){if(x&&x.team&&!x.scratch&&!x.dq)nonScrBC.push(x.team);});
-      nonScrBC.forEach(function(t,idx){
-        var firstInFinal;
-        if(idx<8)firstInFinal=0;
-        else if(idx<16)firstInFinal=Math.min(8,pts.length-1);
-        else firstInFinal=Math.min(16,pts.length-1);
-        if(!bcPts[t])bcPts[t]=0;
-        bcPts[t]+=(pts[firstInFinal]||0);
+      Object.keys(tiers).forEach(function(ti){
+        var lo=ti*8,hi=Math.min(lo+7,pts.length-1);
+        Object.keys(tiers[ti]).forEach(function(t){
+          var n=tiers[ti][t];
+          for(var k=0;k<n;k++){
+            wcPts[t]=(wcPts[t]||0)+(pts[hi-k]||0);
+            bcPts[t]=(bcPts[t]||0)+(pts[lo+k]||0);
+          }
+        });
       });
     }
     evScores.push({ev:ev,psychPts:psychPts,prelimPts:prelimPts,finalPts:finalPts,wcPts:wcPts,bcPts:bcPts,
