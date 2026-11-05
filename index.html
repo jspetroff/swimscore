@@ -531,6 +531,16 @@ body.dragging .dh{cursor:grabbing;}
         <div id="rpStatus"></div>
       </div>
       <div class="card">
+        <div class="ct">Session Filter</div>
+        <div class="sp" id="lsp">
+          <div class="pill active" onclick="setLiveSess('full',this)">Full Meet</div>
+          <div class="pill" onclick="setLiveSess('day1',this)">Day 1</div>
+          <div class="pill" onclick="setLiveSess('day2',this)">Day 2</div>
+          <div class="pill" onclick="setLiveSess('day3',this)">Day 3</div>
+          <div class="pill" onclick="setLiveSess('day4',this)">Day 4</div>
+        </div>
+      </div>
+      <div class="card">
         <div class="ct" style="display:flex;align-items:center;justify-content:space-between">Leaderboard<button class="btn bsm" onclick="showMeetReport()" style="font-size:.65rem">&#9733; Meet Report</button></div>
         <div id="clinch" class="cb cn">Loading...</div>
         <div style="max-height:520px;overflow-y:auto;margin-top:.75rem">
@@ -553,16 +563,6 @@ body.dragging .dh{cursor:grabbing;}
         <div class="ct">Adjusted Projection <span style="font-size:.68rem;font-weight:400;color:var(--text-dim)">&mdash; current pace applied to remaining events</span></div>
         <div id="projAdj" style="max-height:340px;overflow-y:auto">
           <div style="color:var(--text-dim);font-size:.82rem">Enter results to generate projection.</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="ct">Session Filter</div>
-        <div class="sp" id="lsp">
-          <div class="pill active" onclick="setLiveSess('full',this)">Full Meet</div>
-          <div class="pill" onclick="setLiveSess('day1',this)">Day 1</div>
-          <div class="pill" onclick="setLiveSess('day2',this)">Day 2</div>
-          <div class="pill" onclick="setLiveSess('day3',this)">Day 3</div>
-          <div class="pill" onclick="setLiveSess('day4',this)">Day 4</div>
         </div>
       </div>
       <div class="card" id="leb">
