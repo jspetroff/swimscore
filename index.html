@@ -182,6 +182,8 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
   .lb-fixed th,.lb-fixed td{padding-left:.3rem;padding-right:.3rem;}}
 /* Team name cell wraps on mobile */
 .lb td.lbtm{overflow-wrap:anywhere;font-size:.8rem;}
+.lb.ath th,.lb.ath td{padding-left:.3rem;padding-right:.3rem;white-space:nowrap;}
+@media (max-width:520px){.lb.ath td{font-size:.72rem;}.lb.ath th{font-size:.6rem;}.lb.ath th,.lb.ath td{padding-left:.2rem;padding-right:.2rem;}}
 /* Gap column in clinch table */
 .lb td.lbgap{white-space:nowrap;font-size:.75rem;}
 .rb{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:.65rem;font-weight:700;font-family:var(--fm);}
@@ -373,6 +375,7 @@ body.dragging .dh{cursor:grabbing;}
     <button class="tb" onclick="showTab('proj',this)">02 &middot; Projections</button>
     <button class="tb" onclick="showTab('depth',this)">03 &middot; Depth</button>
     <button class="tb" onclick="showTab('live',this)">04 &middot; Live</button>
+    <button class="tb" onclick="showTab('ath',this)">05 &middot; Athletes</button>
   </div>
   <div class="sp" id="gsp" style="display:none;margin:-.75rem 0 1.25rem">
     <div class="pill" data-g="Women" onclick="setGender('Women')">Women</div>
@@ -525,6 +528,20 @@ body.dragging .dh{cursor:grabbing;}
     </div>
   </div>
 
+  <!-- TAB 5: ATHLETES (home team) -->
+  <div id="tab-ath" class="tp">
+    <div class="card">
+      <div class="ct" id="athPtsHdr">Points by Athlete</div>
+      <select id="swTeam" style="display:none"></select>
+      <div id="swPts"></div>
+    </div>
+    <div class="card">
+      <div class="ct" id="athSwHdr">Swims vs Entry Time</div>
+      <div id="athSum" style="font-size:.8rem;color:var(--text-dim);margin-bottom:.75rem"></div>
+      <div id="athSwims"></div>
+    </div>
+  </div>
+
   <!-- TAB 4: LIVE -->
   <div id="tab-live" class="tp">
     <div id="le" class="es"><div class="ico">&#127944;</div><div>Load a psych sheet in Setup to begin live scoring.</div></div>
@@ -601,13 +618,6 @@ body.dragging .dh{cursor:grabbing;}
           </div>
         </div>
         <div id="meetReportBody"></div>
-      </div>
-      <div class="card">
-        <div class="ct" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap">
-          <span>Points by Swimmer</span>
-          <select id="swTeam" onchange="setSwTeam(this.value)" style="background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:.25rem .4rem;border-radius:4px;font-size:.75rem"></select>
-        </div>
-        <div id="swPts"></div>
       </div>
     </div>
   </div>
@@ -934,6 +944,7 @@ function showTab(id,btn){
   if(id==='proj')renderProj();
   if(id==='depth')renderDepthSetup();
   if(id==='live')renderLive();
+  if(id==='ath')renderAth();
 }
 
 // ── CONFIG ────────────────────────────────────────────────────────────────
@@ -1235,6 +1246,7 @@ function setGender(g){
   if(id==='tab-proj')renderProj();
   else if(id==='tab-depth')renderDepthSetup();
   else if(id==='tab-live')renderLive();
+  else if(id==='tab-ath')renderAth();
 }
 
 function actEvs(df){
@@ -1990,9 +2002,76 @@ function liveSwimmerPts(){
   });
   return Object.keys(out).map(function(k){return out[k];});
 }
+// ── ATHLETES TAB ─────────────────────────────────────────────────────────
+function renderAth(){
+  var h1=document.getElementById('athPtsHdr');if(h1)h1.textContent='Points by Athlete — '+S.homeTeam;
+  updSwimmerPts();renderAthSwims();
+}
+function tSec(t){
+  if(!t)return null;var m=String(t).match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/);if(!m)return null;
+  return (m[1]?parseInt(m[1])*60:0)+parseFloat(m[2]);
+}
+// Every home-team swim with a recorded time (from uploaded results), against the psych entry time
+// and, for finals, against the same swimmer's prelim.
+function renderAthSwims(){
+  var box=document.getElementById('athSwims'),sum=document.getElementById('athSum');if(!box)return;
+  var home=S.homeTeam,hd=document.getElementById('athSwHdr');if(hd)hd.textContent='Swims vs Entry Time — '+home;
+  var nk=function(n){return String(n||'').toLowerCase().replace(/[^a-z]/g,'');};
+  var by={};
+  S.events.forEach(function(ev,gi){
+    if(!evOn(ev)||ev.isRelay)return;
+    var d=getLR(gi),dive=isDiving(ev),isTF=isTimedFinal(ev);
+    var seed={};ev.entries.forEach(function(en){if(en.team===home)seed[nk(en.name)]=en.seedTime;});
+    var pre={};d.prelim.forEach(function(x){if(x&&x.team===home&&x.time)pre[nk(x.name)]=x.time;});
+    [['prelim',d.prelim],['final',d.final]].forEach(function(pair){
+      pair[1].forEach(function(x,rk){
+        if(!x||x.team!==home||!x.time||!x.name)return;
+        var k=nk(x.name);
+        (by[x.name]=by[x.name]||[]).push({ev:ev,dive:dive,rd:isTF?'TF':pair[0]==='prelim'?'P':'F',place:rk+1,time:x.time,
+          seed:seed[k]||'',pre:pair[0]==='final'&&!isTF?(pre[k]||''):''});
+      });
+    });
+  });
+  var names=Object.keys(by).sort();
+  if(!names.length){box.innerHTML='<div style="color:var(--text-dim);font-size:.82rem">No '+esc(home)+' swims with times yet. Times come from uploaded results PDFs.</div>';sum.textContent='';return;}
+  // swims: lower is better; dives: higher is better. gain > 0 = better than the comparison.
+  function gain(sw,ref){var a=tSec(sw.time),b=tSec(ref);if(a===null||b===null)return null;return sw.dive?a-b:b-a;}
+  function cell(g,dive){
+    if(g===null)return '<span style="color:var(--text-dim)">&mdash;</span>';
+    var v=Math.abs(g).toFixed(2),good=g>0.004,bad=g<-0.004;
+    var txt=dive?(g>=0?'+':'&minus;')+v:(g>0?'&minus;':'+')+v;    // swims show the time change (−0.42 = faster)
+    return '<span style="color:var('+(good?'--green':bad?'--red':'--text-dim')+')">'+txt+'</span>';
+  }
+  var nSw=0,nFast=0,nFin=0,nFinFast=0;
+  function shortEv(n){return n.replace(/Freestyle/,'Free').replace(/Backstroke/,'Back').replace(/Breaststroke/,'Breast').replace(/Butterfly/,'Fly').replace(/ Springboard/,' Diving');}
+  function ord(n){var t=['th','st','nd','rd'],v=n%100;return n+(t[(v-20)%10]||t[v]||t[0]);}
+  var RD={P:'Prelim',F:'Final',TF:'Timed final'};
+  var h='<div style="overflow-x:auto"><table class="lb ath" style="width:100%;font-size:.78rem"><thead><tr><th>Event</th><th>Time</th><th>Entry</th><th title="Change vs entry time">&plusmn;Entry</th><th title="Final vs the same swimmer\u2019s prelim">&plusmn;Prelim</th></tr></thead><tbody>';
+  names.forEach(function(nm){
+    var sw=by[nm].sort(function(a,b){return a.ev.num-b.ev.num||(a.rd==='P'?-1:1);});
+    var faster=0,cmp=0;
+    sw.forEach(function(x){var g=gain(x,x.seed);if(g!==null){cmp++;if(g>0.004)faster++;}});
+    h+='<tr><td colspan="5" style="padding-top:.7rem;font-weight:600;color:var(--text)">'+esc(nm)
+      +(cmp?' <span style="font-weight:400;font-size:.7rem;color:var(--text-dim)">'+faster+' of '+cmp+' better than entry</span>':'')+'</td></tr>';
+    sw.forEach(function(x){
+      var ge=gain(x,x.seed),gp=x.pre?gain(x,x.pre):null;
+      if(ge!==null){nSw++;if(ge>0.004)nFast++;}
+      if(gp!==null){nFin++;if(gp>0.004)nFinFast++;}
+      h+='<tr><td>'+esc(shortEv(x.ev.name))+'<div style="font-size:.66rem;color:var(--text-dim)">'+RD[x.rd]+' &middot; '+ord(x.place)+'</div></td>'
+        +'<td style="font-family:var(--fm)">'+esc(x.time)+'</td><td style="font-family:var(--fm);color:var(--text-dim)">'+esc(x.seed||'NT')+'</td>'
+        +'<td style="font-family:var(--fm)">'+cell(ge,x.dive)+'</td><td style="font-family:var(--fm)">'+(x.pre?cell(gp,x.dive):'')+'</td></tr>';
+    });
+  });
+  box.innerHTML=h+'</tbody></table></div>';
+  function pc(a,b){return b?Math.round(100*a/b)+'%':'';}
+  sum.innerHTML='<strong style="color:var(--text)">'+nFast+' of '+nSw+'</strong> swims better than entry ('+pc(nFast,nSw)+')'
+    +(nFin?' &middot; <strong style="color:var(--text)">'+nFinFast+' of '+nFin+'</strong> finals better than prelims ('+pc(nFinFast,nFin)+')':'')
+    +'<div style="font-size:.7rem;margin-top:.25rem">Green = better. Swims show the time change (&minus;0.42 = 0.42 faster); dives show the score change.</div>';
+}
+
 function updSwimmerPts(){
   var box=document.getElementById('swPts'),sel=document.getElementById('swTeam');if(!box||!sel)return;
-  if(SW_TEAM===null||(SW_TEAM!=='all'&&S.teams.indexOf(SW_TEAM)<0))SW_TEAM=S.teams.indexOf(S.homeTeam)>=0?S.homeTeam:'all';
+  SW_TEAM=S.homeTeam;   // Athletes tab: home team only
   sel.innerHTML='<option value="all">All teams</option>'+S.teams.map(function(t){return '<option'+(t===SW_TEAM?' selected':'')+'>'+esc(t)+'</option>';}).join('');
   if(SW_TEAM==='all')sel.value='all';
   var all=liveSwimmerPts().filter(function(r){return SW_TEAM==='all'||r.team===SW_TEAM;});
@@ -2491,6 +2570,7 @@ function updLB(){
   updLiveBreakdown();
   updFinalsBreakdown();
   updSwimmerPts();
+  if(document.getElementById('tab-ath').classList.contains('act'))renderAthSwims();
 }
 
 
@@ -2783,7 +2863,7 @@ function rpParseResults(pages){
           team=t[k];who=t[1];
         }
         if(!team||RP_TIME.test(team))return;
-        cur.lastRow={place:+pm[2],tie:!!pm[1],team:team,name:who,exh:/^x/.test(last)};
+        cur.lastRow={place:+pm[2],tie:!!pm[1],team:team,name:who,exh:/^x/.test(last),time:(last.match(RP_TIME)||[])[1]||''};
         cur.rows.push(cur.lastRow);
       });
     });
@@ -2872,6 +2952,7 @@ function rpApply(){
       var team=rpMatchTeam(r.team);if(!team)return;               // not in this meet / left out
       if(arr.length>=cap)return;
       var row={team:team,name:r.name||'',scratch:false,dq:false,tie:!!(prev&&prev.place===r.place)};
+      if(r.time)row.time=r.time;     // swim time (or dive score) from the results
       if(r.legs&&r.legs.length)row.legs=r.legs;
       arr.push(row);
       prev=r;
