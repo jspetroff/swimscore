@@ -104,8 +104,12 @@ a{color:var(--gold);}
 .wrap{max-width:1200px;margin:0 auto;padding:1.5rem;}
 
 /* Tabs */
+.topfix{position:sticky;top:0;z-index:100;background:var(--bg);}
+.tabsband{max-width:1200px;margin:0 auto;padding:.75rem 1.5rem .5rem;}
+.tabsband .tabs{margin-bottom:0;}
 .tabs{display:flex;gap:.25rem;margin-bottom:1.5rem;background:var(--bg2);padding:.375rem;border-radius:8px;border:1px solid var(--border);}
 .tb{background:none;border:none;color:var(--text-dim);padding:.5rem 1rem;border-radius:6px;cursor:pointer;font-family:var(--fm);font-size:.72rem;letter-spacing:.08em;transition:all .2s;}
+@media (max-width:520px){.tbn{display:none;}.tabs{gap:.15rem;overflow-x:auto;scrollbar-width:none;}.tabs::-webkit-scrollbar{display:none;}.tb{padding:.5rem .45rem;letter-spacing:.02em;font-size:.68rem;white-space:nowrap;flex:1 1 auto;}}
 .tb:hover{color:var(--text);background:var(--bg3);}
 .tb.act{background:var(--bg3);color:var(--gold);border:1px solid var(--border);}
 .tp{display:none;} .tp.act{display:block;}
@@ -316,6 +320,7 @@ body.dragging .dh{cursor:grabbing;}
 </div>
 <!-- App (hidden until authenticated) -->
 <div id="appRoot" style="display:none">
+<div class="topfix">
 <nav class="modsw" aria-label="Modules"><a href="/roster/">EAGLEROSTER</a><a href="/" class="act">SWIMSCORE</a></nav>
 
 <div class="hdr">
@@ -325,6 +330,16 @@ body.dragging .dh{cursor:grabbing;}
   <span id="userEmail" style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm);margin-left:.5rem;display:none"></span>
   <button onclick="window._signOut()" style="margin-left:.5rem;background:none;border:1px solid var(--border);color:var(--text-dim);font-size:.65rem;font-family:var(--fm);padding:.2rem .5rem;border-radius:4px;cursor:pointer" title="Sign out">&#x2192; Sign out</button>
   <button class="bmeets" onclick="openMeetMgr()">&#128193; Meets</button>
+</div>
+<div class="tabsband">
+  <div class="tabs">
+    <button class="tb act" onclick="showTab('setup',this)"><span class="tbn">01 &middot; </span>Setup</button>
+    <button class="tb" onclick="showTab('proj',this)"><span class="tbn">02 &middot; </span>Projections</button>
+    <button class="tb" onclick="showTab('depth',this)"><span class="tbn">03 &middot; </span>Depth</button>
+    <button class="tb" onclick="showTab('live',this)"><span class="tbn">04 &middot; </span>Live</button>
+    <button class="tb" onclick="showTab('ath',this)"><span class="tbn">05 &middot; </span>Analysis</button>
+  </div>
+</div>
 </div>
 
 <!-- Meet Manager Modal -->
@@ -371,13 +386,6 @@ body.dragging .dh{cursor:grabbing;}
 </div>
 
 <div class="wrap">
-  <div class="tabs">
-    <button class="tb act" onclick="showTab('setup',this)">01 &middot; Setup</button>
-    <button class="tb" onclick="showTab('proj',this)">02 &middot; Projections</button>
-    <button class="tb" onclick="showTab('depth',this)">03 &middot; Depth</button>
-    <button class="tb" onclick="showTab('live',this)">04 &middot; Live</button>
-    <button class="tb" onclick="showTab('ath',this)">05 &middot; Analysis</button>
-  </div>
   <div class="sp" id="gsp" style="display:none;margin:-.75rem 0 1.25rem">
     <div class="pill" data-g="Women" onclick="setGender('Women')">Women</div>
     <div class="pill" data-g="Men" onclick="setGender('Men')">Men</div>

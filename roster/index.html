@@ -73,7 +73,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--fd);font-size:14px
 .modsw a:hover{color:var(--text);background:var(--bg3);}
 .modsw a.act{background:var(--bg2);color:var(--gold);border:1px solid var(--border);}
 /* Header */
-.hdr{display:flex;align-items:center;gap:.75rem;padding:.75rem 1.5rem;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;}
+.topfix{position:sticky;top:0;z-index:100;background:var(--bg);}
+.hdr{display:flex;align-items:center;gap:.75rem;padding:.75rem 1.5rem;background:var(--bg2);border-bottom:1px solid var(--border);}
 .logo{font-family:var(--fm);font-size:.82rem;letter-spacing:.15em;color:var(--gold);font-weight:700;}
 .logo span{color:var(--text-dim);}
 .sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;}
@@ -306,6 +307,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 </div>
 <!-- App (hidden until signed in) -->
 <div id="appRoot" style="display:none">
+<div class="topfix">
 <nav class="modsw" aria-label="Modules"><a href="/roster/" class="act">EAGLEROSTER</a><a href="/">SWIMSCORE</a></nav>
 
 <div class="hdr">
@@ -326,6 +328,9 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
   <div class="tab" onclick="switchTab('times',this)">07 · Times Upload</div>
   <div class="tab" onclick="switchTab('tags',this)">08 · Tags</div>
   <div class="tab" onclick="switchTab('lessons',this)">09 · Lessons</div>
+</div>
+<script>(function(){var t=document.querySelector('.topfix');if(!t||!window.ResizeObserver)return;
+new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh',t.offsetHeight+'px');}).observe(t);})();</script>
 </div>
 
 <!-- ═══════════════════════════════════ TAB 1: ROSTER ═══════════════════════════════════ -->
@@ -3726,7 +3731,7 @@ function renderLineupNow() {
   box.innerHTML = pick + settings + datalist +
     `<div style="display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:1rem;align-items:start">
       <div>${events}</div>
-      <div class="card" style="position:sticky;top:.5rem"><div class="ct">${g === 'W' ? 'Women' : 'Men'} · ${pool.length}</div>
+      <div class="card" style="position:sticky;top:calc(var(--tfh,0px) + .5rem)"><div class="ct">${g === 'W' ? 'Women' : 'Men'} · ${pool.length}</div>
         ${over.length ? `<div class="st sterr" style="margin-bottom:.5rem">Over the limit: ${over.map(s => esc(s.first + ' ' + s.last)).join(', ')}</div>` : ''}
         ${unplaced.length ? `<div style="font-size:.72rem;color:var(--gold);margin-bottom:.5rem">Not in any event yet: ${unplaced.length}</div>` : ''}
         <div style="font-size:.68rem;color:var(--text-dim);margin-bottom:.35rem">Drag a name onto an event, or click it and then the event's + button. "out" marks someone unavailable.</div>
