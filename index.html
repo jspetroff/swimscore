@@ -1744,10 +1744,19 @@ function drEnd(){
     if(D.mode==='final')delete S.liveResults[D.gi].finalPending;
     arr.forEach(function(x,i){if(x)x.tie=ties[i];});
     save();updLB();updClinch();
-    var eh=document.getElementById('eh'+D.gi);
-    if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('partial');}
+    refreshEvHead(D.gi);
   }
   renderEventBody(D.gi);
+}
+
+// Event header colour + label, same rules as the event list: green once finals are scored
+function refreshEvHead(gi){
+  var d=getLR(gi);
+  var hasPrelim=d.prelim.some(function(x){return x&&x.team;});
+  var hasFinal=d.final.some(function(x){return x&&x.team;})&&!isPending(gi);
+  var eh=document.getElementById('eh'+gi);
+  if(eh){eh.classList.remove('done','partial','pending');eh.classList.add(hasFinal?'done':(hasPrelim||d.final.some(function(x){return x&&x.team;}))?'partial':'pending');}
+  var epb=document.getElementById('epb'+gi);if(epb)epb.textContent=statusLabel(gi);
 }
 
 function getLR(gi){
@@ -1815,8 +1824,7 @@ function setLR(gi,rk,f,v){
   if(mode==='final')delete S.liveResults[gi].finalPending;
   S.liveResults[gi][mode][rk][f]=v;
   save();updLB();updClinch();
-  var eh=document.getElementById('eh'+gi);
-  if(eh){eh.classList.remove('done','partial','pending');eh.classList.add('partial');}
+  refreshEvHead(gi);
 }
 
 // Places split into finals of 8 that nobody can move between:
@@ -1878,10 +1886,7 @@ function mkDone(gi,quiet){
     }
   }
   save();
-  var eh=document.getElementById('eh'+gi);
-  if(eh){eh.classList.remove('done','partial','pending');eh.classList.add(mode==='final'?'done':'partial');}
-  var epb=document.getElementById('epb'+gi);
-  if(epb)epb.textContent=statusLabel(gi);
+  refreshEvHead(gi);
   if(!quiet)renderEventBody(gi);
   updLB();updClinch();
 }
