@@ -183,7 +183,8 @@ input[type=text]:focus,input[type=date]:focus,select:focus{border-color:var(--go
 /* Team name cell wraps on mobile */
 .lb td.lbtm{overflow-wrap:anywhere;font-size:.8rem;}
 .lb.ath th,.lb.ath td{padding-left:.3rem;padding-right:.3rem;white-space:nowrap;}
-@media (max-width:520px){.lb.ath td{font-size:.72rem;}.lb.ath th{font-size:.6rem;}.lb.ath th,.lb.ath td{padding-left:.2rem;padding-right:.2rem;}}
+@media (max-width:520px){.lb.ath td{font-size:.66rem;}.lb.ath th{font-size:.56rem;letter-spacing:0;}.lb.ath th,.lb.ath td{padding-left:.12rem;padding-right:.12rem;}
+  .lb.ath td:first-child{white-space:normal;}}
 /* Gap column in clinch table */
 .lb td.lbgap{white-space:nowrap;font-size:.75rem;}
 .rb{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:.65rem;font-weight:700;font-family:var(--fm);}
@@ -2002,10 +2003,77 @@ function liveSwimmerPts(){
   });
   return Object.keys(out).map(function(k){return out[k];});
 }
+// ── EAGLEROSTER BESTS (season / lifetime best before this meet) ─────────────
+// EagleRoster keeps its roster in Firestore at roster/main (split into roster/main_1… when large).
+var ER=null,_erLoad=null,_erErr='';
+function erLoad(force){
+  if(ER&&!force)return Promise.resolve(ER);
+  if(!window._fbReady||!window._fsGetDoc||!window._fsDoc){_erErr='not signed in';return Promise.resolve(null);}
+  if(_erLoad&&!force)return _erLoad;
+  var ref=function(i){return window._fsDoc(window._db,'roster',i?'main_'+i:'main');};
+  _erLoad=(async function(){
+    var m=await window._fsGetDoc(ref(0));
+    if(!m.exists()){_erErr='no EagleRoster data';return null;}
+    var d=m.data(),n=d.parts||1,s=d.data||'';
+    for(var i=1;i<n;i++){
+      var p=await window._fsGetDoc(ref(i));
+      if(!p.exists()||p.data().v!==d.v)throw new Error('EagleRoster was saving — try again');
+      s+=p.data().data;
+    }
+    ER=JSON.parse(s);_erErr='';return ER;
+  })().catch(function(e){console.warn('EagleRoster load failed',e);_erErr=e.message||'load failed';_erLoad=null;return null;});
+  return _erLoad;
+}
+// Same name rules as EagleRoster (aliases first, then first+last, then last name, then initial)
+function erNorm(s){return (s||'').toLowerCase().replace(/[.'’]/g,'').replace(/[^a-z\s-]/g,' ').replace(/\s+/g,' ').trim();}
+function erSplit(full){
+  var t=erNorm(full).split(' ').filter(Boolean);
+  while(t.length>2&&/^(jr|sr|ii|iii|iv)$/.test(t[t.length-1]))t.pop();
+  var rest=t.slice(1).filter(function(x){return x.length>1;});
+  return {first:t[0]||'',last:rest.join(' ')||(t[1]||''),lastTok:rest.length?rest[rest.length-1]:(t[1]||''),toks:rest};
+}
+function erMatch(name,gender){
+  if(!ER)return null;
+  var full=/,/.test(name)?name.split(',').slice(1).join(' ').trim()+' '+name.split(',')[0].trim():name;   // "Last, First" -> "First Last"
+  var sws=Object.keys(ER.swimmers||{}).map(function(k){var s=ER.swimmers[k];if(!s.id)s.id=k;return s;});
+  var ak=gender+'|'+erNorm(full),al=ER.aliases||{};
+  if(al[ak]&&ER.swimmers[al[ak]])return ER.swimmers[al[ak]];
+  var n=erSplit(full),pool=sws.filter(function(s){return s.gender===gender;});
+  var lastOf=function(s){return erSplit('x '+s.last).last;},firstOf=function(s){return erNorm(s.first).split(' ')[0];};
+  var c=pool.filter(function(s){return firstOf(s)===n.first&&(lastOf(s)===n.last||lastOf(s)===n.lastTok);});
+  if(c.length===1)return c[0];
+  c=pool.filter(function(s){return lastOf(s)===n.last||lastOf(s)===n.lastTok;});
+  if(c.length===1)return c[0];
+  if(c.length>1){var d=c.filter(function(s){return firstOf(s)[0]===n.first[0];});if(d.length===1)return d[0];}
+  return null;
+}
+function erEvent(ev){
+  if(isDiving(ev))return /^1m/.test(ev.name)?'1m Springboard':/^3m/.test(ev.name)?'3m Springboard':'Platform';
+  var m=ev.name.replace(/\s+Yard\s+/i,' ').match(/^(\d+)\s+(Freestyle|Backstroke|Breaststroke|Butterfly|IM|Individual Medley)/i);
+  if(!m)return null;
+  return m[1]+' '+({freestyle:'FS',backstroke:'BK',breaststroke:'BR',butterfly:'FL',im:'IM','individual medley':'IM'})[m[2].toLowerCase()];
+}
+function erSeasonOf(date){var y=+date.slice(0,4),m=+date.slice(5,7),s=m>=8?y:y-1;return s+'-'+String(s+1).slice(2);}
+// Season best = best swim in the meet's season before the meet; lifetime best = best before the meet
+// (SwimCloud's undated lifetime best counts unless it's a time EagleRoster dates to this meet or later).
+function erBests(sw,erEv,dive,meetDate){
+  var val=function(t){return dive?-parseFloat(t):tSec(t);},best=function(a){return a.length?a.reduce(function(x,y){return val(y)<val(x)?y:x;}):'';};
+  var swims=(ER.swims||[]).filter(function(x){return x.sid===sw.id&&x.kind==='ind'&&x.event===erEv&&x.date&&x.time;});
+  var before=swims.filter(function(x){return x.date<meetDate;});
+  var season=erSeasonOf(meetDate);
+  var sb=best(before.filter(function(x){return erSeasonOf(x.date)===season;}).map(function(x){return x.time;}));
+  var t=(sw.times||{})[erEv]||{},hist=(t.history||[]).filter(function(h){return h.time&&h.date;});
+  var late={};hist.concat(swims).forEach(function(h){if(h.date>=meetDate)late[h.time]=1;});
+  var lt=best(hist.filter(function(h){return h.date<meetDate;}).map(function(h){return h.time;})
+    .concat(before.map(function(x){return x.time;})).concat(t.lbt&&!late[t.lbt]?[t.lbt]:[]));
+  return {sb:sb,lt:lt};
+}
+
 // ── ATHLETES TAB ─────────────────────────────────────────────────────────
 function renderAth(){
   var h1=document.getElementById('athPtsHdr');if(h1)h1.textContent='Points by Athlete — '+S.homeTeam;
   updSwimmerPts();renderAthSwims();
+  erLoad(true).then(function(){renderAthSwims();});     // fresh season/lifetime bests each time the tab opens
 }
 function tSec(t){
   if(!t)return null;var m=String(t).match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/);if(!m)return null;
@@ -2017,18 +2085,20 @@ function renderAthSwims(){
   var box=document.getElementById('athSwims'),sum=document.getElementById('athSum');if(!box)return;
   var home=S.homeTeam,hd=document.getElementById('athSwHdr');if(hd)hd.textContent='Swims vs Entry Time — '+home;
   var nk=function(n){return String(n||'').toLowerCase().replace(/[^a-z]/g,'');};
-  var by={};
+  var by={},noMatch={};
   S.events.forEach(function(ev,gi){
     if(!evOn(ev)||ev.isRelay)return;
-    var d=getLR(gi),dive=isDiving(ev),isTF=isTimedFinal(ev);
+    var d=getLR(gi),dive=isDiving(ev),isTF=isTimedFinal(ev),erEv=erEvent(ev),gch=ev.gender==='Men'?'M':'W';
     var seed={};ev.entries.forEach(function(en){if(en.team===home)seed[nk(en.name)]=en.seedTime;});
     var pre={};d.prelim.forEach(function(x){if(x&&x.team===home&&x.time)pre[nk(x.name)]=x.time;});
     [['prelim',d.prelim],['final',d.final]].forEach(function(pair){
       pair[1].forEach(function(x,rk){
         if(!x||x.team!==home||!x.time||!x.name)return;
-        var k=nk(x.name);
+        var k=nk(x.name),b={sb:'',lt:''},erSw=ER&&S.meetDate&&erEv?erMatch(x.name,gch):null;
+        if(erSw)b=erBests(erSw,erEv,dive,S.meetDate);
+        if(ER&&!erSw)noMatch[x.name]=1;
         (by[x.name]=by[x.name]||[]).push({ev:ev,dive:dive,rd:isTF?'TF':pair[0]==='prelim'?'P':'F',place:rk+1,time:x.time,
-          seed:seed[k]||'',pre:pair[0]==='final'&&!isTF?(pre[k]||''):''});
+          seed:seed[k]||'',pre:pair[0]==='final'&&!isTF?(pre[k]||''):'',sb:b.sb,lt:b.lt});
       });
     });
   });
@@ -2042,30 +2112,41 @@ function renderAthSwims(){
     var txt=dive?(g>=0?'+':'&minus;')+v:(g>0?'&minus;':'+')+v;    // swims show the time change (−0.42 = faster)
     return '<span style="color:var('+(good?'--green':bad?'--red':'--text-dim')+')">'+txt+'</span>';
   }
-  var nSw=0,nFast=0,nFin=0,nFinFast=0;
+  var nSw=0,nFast=0,nFin=0,nFinFast=0,nPB=0,nSB=0;
   function shortEv(n){return n.replace(/Freestyle/,'Free').replace(/Backstroke/,'Back').replace(/Breaststroke/,'Breast').replace(/Butterfly/,'Fly').replace(/ Springboard/,' Diving');}
   function ord(n){var t=['th','st','nd','rd'],v=n%100;return n+(t[(v-20)%10]||t[v]||t[0]);}
   var RD={P:'Prelim',F:'Final',TF:'Timed final'};
-  var h='<div style="overflow-x:auto"><table class="lb ath" style="width:100%;font-size:.78rem"><thead><tr><th>Event</th><th>Time</th><th>Entry</th><th title="Change vs entry time">&plusmn;Entry</th><th title="Final vs the same swimmer\u2019s prelim">&plusmn;Prelim</th></tr></thead><tbody>';
+  var h='<div style="overflow-x:auto"><table class="lb ath" style="width:100%;font-size:.78rem"><thead><tr><th>Event</th><th>Time</th><th title="Change vs entry time">&plusmn;Entry</th><th title="Change vs season best before this meet (EagleRoster)">&plusmn;SB</th><th title="Change vs lifetime best before this meet (EagleRoster)">&plusmn;PB</th><th title="Final vs the same swimmer\u2019s prelim">&plusmn;Prelim</th></tr></thead><tbody>';
   names.forEach(function(nm){
     var sw=by[nm].sort(function(a,b){return a.ev.num-b.ev.num||(a.rd==='P'?-1:1);});
     var faster=0,cmp=0;
     sw.forEach(function(x){var g=gain(x,x.seed);if(g!==null){cmp++;if(g>0.004)faster++;}});
-    h+='<tr><td colspan="5" style="padding-top:.7rem;font-weight:600;color:var(--text)">'+esc(nm)
+    h+='<tr><td colspan="6" style="padding-top:.7rem;font-weight:600;color:var(--text)">'+esc(nm)+(noMatch[nm]?' <span style="font-weight:400;font-size:.66rem;color:var(--red)">not found in EagleRoster</span>':'')
       +(cmp?' <span style="font-weight:400;font-size:.7rem;color:var(--text-dim)">'+faster+' of '+cmp+' better than entry</span>':'')+'</td></tr>';
     sw.forEach(function(x){
-      var ge=gain(x,x.seed),gp=x.pre?gain(x,x.pre):null;
+      var ge=gain(x,x.seed),gp=x.pre?gain(x,x.pre):null,gs=x.sb?gain(x,x.sb):null,gl=x.lt?gain(x,x.lt):null;
       if(ge!==null){nSw++;if(ge>0.004)nFast++;}
       if(gp!==null){nFin++;if(gp>0.004)nFinFast++;}
+      var tag=gl!==null&&gl>0.004?'PB':gs!==null&&gs>0.004?'SB':'';
+      if(tag==='PB')nPB++;else if(tag==='SB')nSB++;
       h+='<tr><td>'+esc(shortEv(x.ev.name))+'<div style="font-size:.66rem;color:var(--text-dim)">'+RD[x.rd]+' &middot; '+ord(x.place)+'</div></td>'
-        +'<td style="font-family:var(--fm)">'+esc(x.time)+'</td><td style="font-family:var(--fm);color:var(--text-dim)">'+esc(x.seed||'NT')+'</td>'
-        +'<td style="font-family:var(--fm)">'+cell(ge,x.dive)+'</td><td style="font-family:var(--fm)">'+(x.pre?cell(gp,x.dive):'')+'</td></tr>';
+        +'<td style="font-family:var(--fm)">'+esc(x.time)
+          +(tag?' <span style="font-size:.58rem;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:0 .2rem">'+tag+'</span>':'')
+          +'<div style="font-size:.64rem;color:var(--text-dim)">entry '+esc(x.seed||'NT')+'</div></td>'
+        +'<td style="font-family:var(--fm)">'+cell(ge,x.dive)+'</td>'
+        +'<td style="font-family:var(--fm)">'+(x.sb?cell(gs,x.dive):'<span style="color:var(--text-dim)">&mdash;</span>')+'</td>'
+        +'<td style="font-family:var(--fm)">'+(x.lt?cell(gl,x.dive):'<span style="color:var(--text-dim)">&mdash;</span>')+'</td>'
+        +'<td style="font-family:var(--fm)">'+(x.pre?cell(gp,x.dive):'')+'</td></tr>';
     });
   });
   box.innerHTML=h+'</tbody></table></div>';
   function pc(a,b){return b?Math.round(100*a/b)+'%':'';}
   sum.innerHTML='<strong style="color:var(--text)">'+nFast+' of '+nSw+'</strong> swims better than entry ('+pc(nFast,nSw)+')'
     +(nFin?' &middot; <strong style="color:var(--text)">'+nFinFast+' of '+nFin+'</strong> finals better than prelims ('+pc(nFinFast,nFin)+')':'')
+    +(ER&&S.meetDate?' &middot; <strong style="color:var(--text)">'+nPB+'</strong> lifetime bests &middot; <strong style="color:var(--text)">'+nSB+'</strong> season bests':'')
+    +'<div style="font-size:.7rem;margin-top:.25rem">'+(!S.meetDate?'Set the meet date in Setup to compare with season and lifetime bests.'
+      :ER?'SB and PB come from EagleRoster: bests before '+esc(S.meetDate)+', season '+erSeasonOf(S.meetDate)+'.'
+      :'Season and lifetime bests: '+(_erErr?'couldn\u2019t load EagleRoster ('+esc(_erErr)+').':'loading from EagleRoster\u2026'))+'</div>'
     +'<div style="font-size:.7rem;margin-top:.25rem">Green = better. Swims show the time change (&minus;0.42 = 0.42 faster); dives show the score change.</div>';
 }
 
