@@ -2196,9 +2196,16 @@ function updSwimmerPts(){
   list.forEach(function(r){
     tot+=r.pts;
     var i=rn++;
-    var sw=r.swims.sort(function(a,b){return a.ev.num-b.ev.num;}).map(function(s){
-      return '<div>'+esc(r.relay?s.ev.name.replace(/\s*Relay$/i,''):s.ev.name.replace(/\s*Relay$/i,' relay'))+' <span style="color:var(--text-dim);white-space:nowrap">'+ord(s.place)+' &middot; '+fmt(s.pts)+'</span>'
-        +(s.diver?' <span style="color:var(--text-dim)">'+esc(s.diver.split(',')[0])+'</span>':'')+'</div>';}).join('');
+    function swLine(s){return '<div>'+esc(s.diver?s.ev.name.replace(/\s*Springboard$/i,''):r.relay?s.ev.name.replace(/\s*Relay$/i,''):s.ev.name.replace(/\s*Relay$/i,' relay'))+' <span style="color:var(--text-dim);white-space:nowrap">'+ord(s.place)+' &middot; '+fmt(s.pts)+'</span></div>';}
+    var sw;
+    if(r.divers){
+      // Diving row: each diver with their own total, then their dives
+      var byD={};r.swims.forEach(function(s){(byD[s.diver]=byD[s.diver]||[]).push(s);});
+      sw=Object.keys(byD).map(function(d){return{d:d,sw:byD[d],t:byD[d].reduce(function(a,s){return a+s.pts;},0)};})
+        .sort(function(a,b){return b.t-a.t||a.d.localeCompare(b.d);})
+        .map(function(g,gi2){return '<div style="'+(gi2?'margin-top:.35rem;':'')+'font-weight:600;color:var(--text);display:flex;justify-content:space-between;gap:.5rem"><span>'+esc(g.d)+'</span><span>'+fmt(g.t)+'</span></div>'
+          +'<div style="padding-left:.6rem">'+g.sw.sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('')+'</div>';}).join('');
+    } else sw=r.swims.sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('');
     h+='<tr><td>'+(i<0?'':i+1)+'</td><td style="min-width:6.5rem;'+(r.relay||r.noname?'color:var(--text-dim)':'font-weight:500')+'">'+esc(r.name)+'</td>'
       +(SW_TEAM==='all'?'<td style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim)">'+esc(r.team)+'</td>':'')
       +'<td style="font-size:.72rem">'+sw+'</td><td style="text-align:right"><strong>'+fmt(r.pts)+'</strong></td></tr>';
