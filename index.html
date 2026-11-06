@@ -342,6 +342,7 @@ body.dragging .dh{cursor:grabbing;}
             <select id="nmModel">
               <option value="uaa">UAA Championship</option>
               <option value="ncaa">NCAA Championship</option>
+              <option value="denison">Denison Invitational</option>
               <option value="dual">Dual Meet</option>
             </select>
           </div>
@@ -391,6 +392,7 @@ body.dragging .dh{cursor:grabbing;}
           <select id="sm" onchange="saveCfg()">
             <option value="uaa">UAA Championship</option>
             <option value="ncaa">NCAA Championship</option>
+            <option value="denison">Denison Invitational</option>
             <option value="dual">Dual Meet</option>
           </select>
         </div>
@@ -616,7 +618,10 @@ body.dragging .dh{cursor:grabbing;}
 const MDL={
   uaa:  {ind:[32,28,27,26,25,24,23,22,20,17,16,15,14,13,12,11,9,7,6,5,4,3,2,1], rel:[64,56,54,52,50,48,46,44,40,34,32,30,28,26,24,22]},
   ncaa: {ind:[20,17,16,15,14,13,12,11,9,7,6,5,4,3,2,1], rel:[40,34,32,30,28,26,24,22,18,14,12,10,8,6,4,2]},
-  dual: {ind:[9,7,6,5,4,3,2,1], rel:[11,4]}
+  dual: {ind:[9,7,6,5,4,3,2,1], rel:[11,4]},
+  // Denison Invitational: 27 places in finals of 9 (9-lane pool); relays double, only each school's best relay scores
+  denison:{ind:[35,31,30,29,28,27,26,25,24,22,19,18,17,16,15,14,13,12,10,8,7,6,5,4,3,2,1],
+           rel:[70,62,60,58,56,54,52,50,48,44,38,36,34,32,30,28,26,24,20,16,14,12,10,8,6,4,2]}
 };
 
 // ── MULTI-MEET STORAGE (Firestore + localStorage fallback) ────────────────
@@ -936,7 +941,9 @@ function saveCfg(){
   S.meetName=document.getElementById('mn').value;
   S.meetDate=document.getElementById('md').value;
   S.homeTeam=document.getElementById('ht').value;
+  var was=S.scoringModel;
   S.scoringModel=document.getElementById('sm').value;
+  if(S.scoringModel!==was&&(S.scoringModel==='denison'||was==='denison')&&S.events.length){autoDays();if(typeof renderEvCl==='function')renderEvCl();}
   document.getElementById('hmeta').textContent=(S.meetName||'Unnamed Meet')+(S.meetDate?' \u00b7 '+S.meetDate:'');
   save();renderProj();
 }
@@ -1124,7 +1131,21 @@ function parseSheet(raw){
   renderGenderPills();renderSetup();save();
 }
 
+// Denison Invitational schedule (2026 packet): Thu / Fri / Sat
+function denisonDay(ev){
+  var n=ev.name.replace(/\s+Yard\s+/i,' ').toLowerCase(),men=ev.gender==='Men';
+  if(isDiving(ev)){var one=/^1m/.test(n);return (men?!one:one)?2:3;}   // Fri: men 3m, women 1m; Sat: men 1m, women 3m
+  if(/relay/.test(n)){
+    if(/200 free/.test(n)||/400 medley/.test(n))return 1;
+    if(/200 medley/.test(n)||/800 free/.test(n))return 2;
+    return 3;                                                        // 400 free relay
+  }
+  if(/^(500 free|200 i\.?m|50 free)/.test(n))return 1;
+  if(/^(400 i\.?m|100 (butterfly|fly)|200 free|100 breast|100 back)/.test(n))return 2;
+  return 3;                                                          // 1650, 200 back, 100 free, 200 breast, 200 fly
+}
 function autoDays(){
+  if(S.scoringModel==='denison'){S.events.forEach(function(ev){ev.day=denisonDay(ev);});return;}
   // Auto-assign days based on common D3 championship patterns
   var dayMap={};
   S.events.forEach(function(ev){
@@ -1190,6 +1211,8 @@ function setDay(i,d){S.events[i].day=parseInt(d);save();}
 function clearAll(){if(confirm('Clear all data for this meet?')){S.events=[];S.teams=[];S.activeTeams=[];S.liveResults={};document.getElementById('pps').style.display='none';renderSetup();save();showSt('Cleared.','ok');}}
 
 // ── SCORING UTILS ─────────────────────────────────────────────────────────
+// Swimmers per final (A/B/C): 9 at Denison's 9-lane pool, 8 elsewhere
+function finSize(){return S.scoringModel==='denison'?9:8;}
 function mpts(isRelay){var m=MDL[S.scoringModel]||MDL.ncaa;return isRelay?m.rel:m.ind;}
 
 // ── GENDER VIEW ──────────────────────────────────────────────────────────
@@ -1518,7 +1541,11 @@ function renderLive(){
 // ── Prelim/Final helpers ──────────────────────────────────────────────────
 function isDiving(ev){return !!(ev&&ev.isDiving);}
 // Timed finals: the mile, and every relay at UAAs (each team swims its A and B relay once)
-function isTimedFinal(ev){return !isDiving(ev)&&(/1650|1500/i.test(ev.name)||(!!ev.isRelay&&S.scoringModel==='uaa'));}
+// Denison: every relay and both diving events are timed finals too
+function isTimedFinal(ev){
+  if(isDiving(ev))return S.scoringModel==='denison';
+  return /1650|1500/i.test(ev.name)||(!!ev.isRelay&&(S.scoringModel==='uaa'||S.scoringModel==='denison'));
+}
 function evMode(gi){return S.liveMode[gi]||'prelim';}
 function setEvMode(gi,mode){
   if(!S.liveMode)S.liveMode={};
@@ -1545,7 +1572,7 @@ function renderEventBody(gi){
   var res=d[mode]||[];
   var prelimRes=d.prelim||[];
   var pts=mpts(ev.isRelay);
-  var entries=psychOrder(ev);
+  var entries=psychOrderAll(ev);
   var hasPrelim=prelimRes.some(function(x){return x&&x.team;});
   var hasFinal=d.final.some(function(x){return x&&x.team;});
   var preLocked=mode==='prelim'&&!isTF&&!!(S.liveResults[gi]&&S.liveResults[gi].prelimLocked);
@@ -1587,6 +1614,7 @@ function renderEventBody(gi){
 
   for(var rk=0;rk<pts.length;rk++){
     var r=ghost?(ghost[rk]?{team:ghost[rk].team,name:ghost[rk].name}:{}):(res[rk]||{});
+    var exh=exhRelay(ev)&&r.team&&!r.scratch&&!r.dq&&(ghost||res).slice(0,rk).some(function(y){return y&&y.team===r.team&&!y.scratch&&!y.dq;});
     var ps=entries[rk]||{};
     var tm=r.team!==undefined?r.team:'';
     var sc2=r.scratch?'checked':'';
@@ -1631,13 +1659,13 @@ function renderEventBody(gi){
     } else {
       refCell='<span style="color:var(--text-dim);font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(ps.team||'—')+'</span>';
     }
-    if(lockFin&&rk%8===0)h+='<div class="hl'+(rk>0?' hlb':'')+'">'+'ABC'.charAt(rk/8)+' FINAL</div>';
+    if(lockFin&&rk%finSize()===0)h+='<div class="hl'+(rk>0?' hlb':'')+'">'+'ABC'.charAt(rk/finSize())+' FINAL</div>';
     h+='<div class="pr" data-rk="'+rk+'" style="grid-template-columns:44px 1fr 1fr auto auto auto">';
     h+='<span class="pn" style="display:flex;align-items:center;gap:.3rem;'+(r.dq?'color:var(--red);text-decoration:line-through':'')+'">'
       +(tm&&!preLocked?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
       +(rk+1)+(r.dq?' DQ':'')+'</span>';
     // Swimmer name first (what you match to the scoreboard), team beside it; reorder by dragging
-    h+='<div class="rw'+(ghost?' rwg':'')+'" style="min-width:0;display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
+    h+='<div class="rw'+(ghost?' rwg':'')+'" title="'+(exh?'Exhibition: this school already has a relay ahead, so this one does not score':'')+'" style="min-width:0;'+(exh?'opacity:.5;':'')+'display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
       +(tm?(r.name&&!ev.isRelay?'<span style="font-size:.95rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
               :'<span style="font-size:.95rem;font-weight:500;color:var(--text)">'+esc(tm+(ev.isRelay?relayLetterOf(r.name):''))+'</span>')
           :'<span style="color:var(--text-dim);font-size:.75rem">—</span>')
@@ -1671,7 +1699,7 @@ function drStart(e,gi,rk){
   if(mode==='prelim'&&S.liveResults[gi]&&S.liveResults[gi].prelimLocked)return;
   if(!d[mode].some(function(x){return x&&x.team;})){mkDone(gi,true);d=getLR(gi);}
   var lock=heatLock(gi,mode);
-  var n=mpts(ev.isRelay).length,lo=lock?Math.floor(rk/8)*8:0,hi=lock?Math.min(lo+7,n-1):n-1;
+  var F=finSize(),n=mpts(ev.isRelay).length,lo=lock?Math.floor(rk/F)*F:0,hi=lock?Math.min(lo+F-1,n-1):n-1;
   var pg=document.getElementById('pg'+gi);if(!pg)return;
   var rows={};pg.querySelectorAll('.pr[data-rk]').forEach(function(r){rows[+r.getAttribute('data-rk')]=r;});
   // only rows that hold a swimmer can be swapped with
@@ -1802,8 +1830,27 @@ function heatLock(gi,mode){
 }
 // Projected finishing order from the psych sheet. UAA relays: every A relay (in seed order) is
 // ahead of every B relay, since the B relays swim the B final.
+// Denison: only each school's best-finishing relay scores (whatever its letter); its other relays are
+// exhibition and don't take a place.
+function exhRelay(ev){return !!ev&&!!ev.isRelay&&S.scoringModel==='denison';}
+function scoringRes(ev,res){
+  if(!exhRelay(ev)||!res)return res;
+  var seen={};
+  return res.filter(function(x){
+    if(!x||!x.team||x.scratch||x.dq)return true;
+    if(seen[x.team])return false;
+    seen[x.team]=1;return true;
+  });
+}
+// Every entry in seed order (for showing and filling places)
+function psychOrderAll(ev){
+  var seeds=(ev.entries||[]).slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+  if(uaaRelay(ev))seeds=seeds.filter(function(e){return relayLetter(e)!=='B';}).concat(seeds.filter(function(e){return relayLetter(e)==='B';}));
+  return seeds;
+}
 function psychOrder(ev){
   var seeds=(ev.entries||[]).slice().sort(function(a,b){return a.seedPlace-b.seedPlace;});
+  if(exhRelay(ev))return scoringRes(ev,seeds);
   if(uaaRelay(ev))seeds=seeds.filter(function(e){return relayLetter(e)!=='B';}).concat(seeds.filter(function(e){return relayLetter(e)==='B';}));
   return seeds;
 }
@@ -1814,7 +1861,7 @@ function relayLetter(e){var m=String(e.name||'').match(/\s([A-Z])(?:\s+Relay)?$/
 function chalkSrc(gi,mode){
   var ev=S.events[gi],d=getLR(gi);
   if(mode==='final'&&d.prelim.some(function(x){return x&&x.team;}))return d.prelim;
-  return psychOrder(ev).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
+  return psychOrderAll(ev).map(function(e){return{team:e.team,name:e.name,scratch:false,tie:false};});
 }
 function mkDone(gi,quiet){
   var ev=S.events[gi];if(!ev)return;
@@ -1864,6 +1911,7 @@ function liveScores(){
     var finalArr=Array.isArray(d)?d:(d&&d.final||[]);
     var prelimArr=d&&!Array.isArray(d)?(d.prelim||[]):[];
     var res=(finalArr.some(function(x){return x&&x.team;}))?finalArr:(isTF2?prelimArr:finalArr);
+    res=scoringRes(ev,res);
     // Build list of non-scratched finishers
     var finishers=[];
     res.forEach(function(x,rk){
@@ -1903,7 +1951,7 @@ function liveSwimmerPts(){
     if(!evOn(ev))return;
     var pts=mpts(ev.isRelay),d=getLR(gi);
     if(S.liveResults[gi]&&S.liveResults[gi].finalPending)return;     // pre-filled from prelims, not scored yet
-    var res=d.final.some(function(x){return x&&x.team;})?d.final:(isTimedFinal(ev)?d.prelim:[]);
+    var res=scoringRes(ev,d.final.some(function(x){return x&&x.team;})?d.final:(isTimedFinal(ev)?d.prelim:[]));
     var fin=[];
     res.forEach(function(x,rk){if(x&&x.team&&!x.scratch&&!x.dq)fin.push({x:x,rk:rk});});
     var i=0;
@@ -1980,9 +2028,10 @@ function finalCounts(){
     entries.forEach(function(en,idx){
       if(!counts[en.team])return;
       var place=idx+1;
-      if(place<=8)counts[en.team].a++;
-      else if(place<=16)counts[en.team].b++;
-      else if(place<=24)counts[en.team].c++;
+      var F=finSize();
+      if(place<=F)counts[en.team].a++;
+      else if(place<=2*F)counts[en.team].b++;
+      else if(place<=3*F)counts[en.team].c++;
     });
   });
   return counts;
@@ -2009,9 +2058,10 @@ function updFinalsBreakdown(){
     res.forEach(function(x,rk){
       if(!x||x.scratch||!x.team)return;
       if(!teamCounts[x.team])return;
-      if(rk<8)teamCounts[x.team].a++;
-      else if(rk<16)teamCounts[x.team].b++;
-      else if(rk<24)teamCounts[x.team].c++;
+      var F=finSize();
+      if(rk<F)teamCounts[x.team].a++;
+      else if(rk<2*F)teamCounts[x.team].b++;
+      else if(rk<3*F)teamCounts[x.team].c++;
     });
     var isPrelimOnly=!d.final.some(function(x){return x&&x.team;})&&!isTimedFinal(ev);
     rows.push({ev:ev,tc:teamCounts,isPrelimOnly:isPrelimOnly});
@@ -2100,7 +2150,7 @@ function updLiveBreakdown(){
     var finalRes=isPending(gi)?[]:d.final&&d.final.some(function(x){return x&&x.team;})?d.final:
                  (isTF&&hasPrelim?d.prelim:[]);
     var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;});
-    var finalPts=hasFinal?ptsFromRes(finalRes,pts):{};
+    var finalPts=hasFinal?ptsFromRes(scoringRes(ev,finalRes),pts):{};
     // Worst / best case once prelims are in: a team's swimmers in the same final take the bottom
     // places of that final (worst) or the top places (best). Three NYU A finalists: worst 6th+7th+8th,
     // best 1st+2nd+3rd — the same total as if they tied and split those points.
@@ -2111,10 +2161,10 @@ function updLiveBreakdown(){
       var tiers={};                                   // tier index -> {team: count}
       nonScr.forEach(function(t,idx){
         if(idx>=pts.length)return;                    // didn't make a scoring final
-        var ti=Math.floor(idx/8);(tiers[ti]=tiers[ti]||{})[t]=((tiers[ti]||{})[t]||0)+1;
+        var ti=Math.floor(idx/finSize());(tiers[ti]=tiers[ti]||{})[t]=((tiers[ti]||{})[t]||0)+1;
       });
       Object.keys(tiers).forEach(function(ti){
-        var lo=ti*8,hi=Math.min(lo+7,pts.length-1);
+        var lo=ti*finSize(),hi=Math.min(lo+finSize()-1,pts.length-1);
         Object.keys(tiers[ti]).forEach(function(t){
           var n=tiers[ti][t];
           for(var k=0;k<n;k++){
@@ -2229,6 +2279,7 @@ function buildMeetReportData(){
     var finalRes=Array.isArray(d)?d:((d.final&&d.final.some(function(x){return x&&x.team;}))?d.final:(isTF?(d.prelim||[]):(d.final||[])));
     var hasFinal=finalRes&&finalRes.some(function(x){return x&&x.team;})&&!isPending(gi);
     if(!hasFinal)return;
+    finalRes=scoringRes(ev,finalRes);
 
     var evPts=mpts(ev.isRelay);
     var entries=psychOrder(ev);
@@ -2550,7 +2601,7 @@ function renderMeetList(){
   if(!meta.length){h='<div style="color:var(--text-dim);font-size:.82rem;padding:.5rem 0">No meets saved yet.</div>';}
   meta.slice().reverse().forEach(function(m){
     var isActive=m.id===ACTIVE_ID;
-    var modelLabel=m.model==='uaa'?'UAA':m.model==='ncaa'?'NCAA':'Dual';
+    var modelLabel=m.model==='uaa'?'UAA':m.model==='ncaa'?'NCAA':m.model==='denison'?'Denison':'Dual';
     h+='<div class="meet-item'+(isActive?' active-meet':'')+'">';
     h+='<div class="meet-item-info">';
     h+='<div class="meet-item-name">'+esc(m.name||'Unnamed Meet')+(isActive?' <span class="active-badge">ACTIVE</span>':'')+'</div>';
