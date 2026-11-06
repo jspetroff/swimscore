@@ -2062,6 +2062,18 @@ function erEvent(ev){
   return m[1]+' '+({freestyle:'FS',backstroke:'BK',breaststroke:'BR',butterfly:'FL',im:'IM','individual medley':'IM'})[m[2].toLowerCase()];
 }
 function erSeasonOf(date){var y=+date.slice(0,4),m=+date.slice(5,7),s=m>=8?y:y-1;return s+'-'+String(s+1).slice(2);}
+// Records (EagleRoster's Emory varsity records and NCAA DIII records): the record as it stood before the meet,
+// so a record this meet set (and EagleRoster has since approved) still counts as broken here.
+function erRecBefore(list,g,recEv,meetDate){
+  var r=(list||[]).find(function(x){return x.g===g&&x.ev===recEv&&x.type!=='dive';});if(!r)return null;
+  var all=[{time:r.time,date:r.date||''}].concat((r.hist||[]).map(function(h){return{time:h.time,date:h.date||''};}));
+  var prior=all.filter(function(x){return x.time&&x.date<meetDate;}).sort(function(a,b){return b.date.localeCompare(a.date);});
+  return prior.length?prior[0].time:null;
+}
+function erRecEvent(ev){
+  if(ev.isRelay){var m=ev.name.replace(/\s+Yard\s+/i,' ').match(/^(\d+)\s+(Free|Freestyle|Medley)/i);return m?m[1]+' '+(/medley/i.test(m[2])?'Medley':'Free')+' Relay':null;}
+  return isDiving(ev)?null:erEvent(ev);     // diving records depend on the number of dives, so they're left out
+}
 // Season best = best swim in the meet's season before the meet; lifetime best = best before the meet
 // (SwimCloud's undated lifetime best counts unless it's a time EagleRoster dates to this meet or later).
 function erBests(sw,erEv,dive,meetDate){
@@ -2093,7 +2105,7 @@ function renderAthSwims(){
   var box=document.getElementById('athSwims'),sum=document.getElementById('athSum');if(!box)return;
   var home=S.homeTeam,hd=document.getElementById('athSwHdr');if(hd)hd.textContent='Swims vs Entry Time — '+home;
   var nk=function(n){return String(n||'').toLowerCase().replace(/[^a-z]/g,'');};
-  var by={},noMatch={};
+  var by={},noMatch={},recs=[];
   S.events.forEach(function(ev,gi){
     if(!evOn(ev)||ev.isRelay)return;
     var d=getLR(gi),dive=isDiving(ev),isTF=isTimedFinal(ev),erEv=erEvent(ev),gch=ev.gender==='Men'?'M':'W';
@@ -2104,11 +2116,25 @@ function renderAthSwims(){
         if(!x||x.team!==home||!x.time||!x.name)return;
         var k=nk(x.name),b={sb:'',lt:''},erSw=ER&&S.meetDate&&erEv?erMatch(x.name,gch):null;
         if(erSw)b=erBests(erSw,erEv,dive,S.meetDate);
+        var rk2=ER&&S.meetDate?erRecEvent(ev):null,rv=rk2?erRecBefore(ER.records,gch,rk2,S.meetDate):null,rn=rk2?erRecBefore(ER.ncaaRecords,gch,rk2,S.meetDate):null;
+        var brk={vr:rv&&tSec(x.time)<tSec(rv)?rv:'',ncaa:rn&&tSec(x.time)<tSec(rn)?rn:''};
+        if(brk.vr||brk.ncaa)recs.push({ev:ev,who:x.name,time:x.time,rd:isTF?'TF':pair[0]==='prelim'?'Prelim':'Final',vr:brk.vr,ncaa:brk.ncaa});
         if(ER&&!erSw)noMatch[x.name]=1;
         (by[x.name]=by[x.name]||[]).push({ev:ev,dive:dive,rd:isTF?'TF':pair[0]==='prelim'?'P':'F',place:rk+1,time:x.time,
-          seed:seed[k]||'',pre:pair[0]==='final'&&!isTF?(pre[k]||''):'',sb:b.sb,lt:b.lt});
+          seed:seed[k]||'',pre:pair[0]==='final'&&!isTF?(pre[k]||''):'',sb:b.sb,lt:b.lt,vr:brk.vr,ncaa:brk.ncaa});
       });
     });
+  });
+  if(ER&&S.meetDate)S.events.forEach(function(ev,gi){
+    if(!evOn(ev)||!ev.isRelay)return;
+    var rk2=erRecEvent(ev);if(!rk2)return;
+    var gch=ev.gender==='Men'?'M':'W',rv=erRecBefore(ER.records,gch,rk2,S.meetDate),rn=erRecBefore(ER.ncaaRecords,gch,rk2,S.meetDate);
+    var d=getLR(gi);
+    [['Prelim',d.prelim],['Final',d.final]].forEach(function(pair){pair[1].forEach(function(x){
+      if(!x||x.team!==home||!x.time)return;
+      var vr=rv&&tSec(x.time)<tSec(rv)?rv:'',nc=rn&&tSec(x.time)<tSec(rn)?rn:'';
+      if(vr||nc)recs.push({ev:ev,who:home+relayLetterOf(x.name)+' relay',time:x.time,rd:isTimedFinal(ev)?'TF':pair[0],vr:vr,ncaa:nc,legs:x.legs});
+    });});
   });
   var names=Object.keys(by).sort();
   if(!names.length){box.innerHTML='<div style="color:var(--text-dim);font-size:.82rem">No '+esc(home)+' swims with times yet. Times come from uploaded results PDFs.</div>';sum.textContent='';return;}
@@ -2136,10 +2162,13 @@ function renderAthSwims(){
       if(ge!==null){nSw++;if(ge>0.004)nFast++;}
       if(gp!==null){nFin++;if(gp>0.004)nFinFast++;}
       var tag=gl!==null&&gl>0.004?'PB':gs!==null&&gs>0.004?'SB':'';
-      if(tag==='PB')nPB++;else if(tag==='SB')nSB++;
+      if(gl!==null&&gl>0.004)nPB++;
+      if(gs!==null&&gs>0.004)nSB++;
+      var rtag=(x.ncaa?'NCAA ':'')+(x.vr?'VR':'');
       h+='<tr><td>'+esc(shortEv(x.ev.name))+'<div style="font-size:.66rem;color:var(--text-dim)">'+RD[x.rd]+' &middot; '+ord(x.place)+'</div></td>'
         +'<td style="font-family:var(--fm)">'+esc(x.time)
           +(tag?' <span style="font-size:.58rem;color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:0 .2rem">'+tag+'</span>':'')
+          +(rtag?' <span style="font-size:.58rem;color:var(--bg);background:var(--gold);border-radius:3px;padding:0 .2rem">'+rtag.trim()+'</span>':'')
           +'<div style="font-size:.64rem;color:var(--text-dim)">entry '+esc(x.seed||'NT')+'</div></td>'
         +'<td style="font-family:var(--fm)">'+cell(ge,x.dive)+'</td>'
         +'<td style="font-family:var(--fm)">'+(x.sb?cell(gs,x.dive):'<span style="color:var(--text-dim)">&mdash;</span>')+'</td>'
@@ -2151,9 +2180,13 @@ function renderAthSwims(){
   function pc(a,b){return b?Math.round(100*a/b)+'%':'';}
   sum.innerHTML='<strong style="color:var(--text)">'+nFast+' of '+nSw+'</strong> swims better than entry ('+pc(nFast,nSw)+')'
     +(nFin?' &middot; <strong style="color:var(--text)">'+nFinFast+' of '+nFin+'</strong> finals better than prelims ('+pc(nFinFast,nFin)+')':'')
-    +(ER&&S.meetDate?' &middot; <strong style="color:var(--text)">'+nPB+'</strong> lifetime bests &middot; <strong style="color:var(--text)">'+nSB+'</strong> season bests':'')
+    +(ER&&S.meetDate?' &middot; <strong style="color:var(--text)">'+nPB+'</strong> lifetime bests &middot; <strong style="color:var(--text)">'+nSB+'</strong> season bests'
+      +' &middot; <strong style="color:var(--text)">'+recs.filter(function(r){return r.vr;}).length+'</strong> varsity records &middot; <strong style="color:var(--text)">'+recs.filter(function(r){return r.ncaa;}).length+'</strong> NCAA records':'')
+    +(recs.length?'<div style="margin-top:.5rem;padding:.5rem .65rem;border:1px solid var(--gold);border-radius:6px">'+recs.sort(function(a,b){return a.ev.num-b.ev.num;}).map(function(r){
+        return '<div style="color:var(--text)"><strong style="color:var(--gold)">'+(r.ncaa&&r.vr?'NCAA + VR':r.ncaa?'NCAA record':'Varsity record')+'</strong> &middot; '+esc(r.ev.gender+' '+r.ev.name)+' &middot; '+esc(r.who)+' '+esc(r.time)
+          +' <span style="color:var(--text-dim)">('+r.rd+'; was '+(r.ncaa?'NCAA '+esc(r.ncaa):'')+(r.ncaa&&r.vr?', ':'')+(r.vr?'VR '+esc(r.vr):'')+')</span></div>';}).join('')+'</div>':'')
     +'<div style="font-size:.7rem;margin-top:.25rem">'+(!S.meetDate?'Set the meet date in Setup to compare with season and lifetime bests.'
-      :ER?'SB and PB come from EagleRoster: bests before '+esc(S.meetDate)+', season '+erSeasonOf(S.meetDate)+'.'
+      :ER?'SB, PB and records come from EagleRoster as they stood before '+esc(S.meetDate)+' (season '+erSeasonOf(S.meetDate)+'). Season bests include lifetime bests. Diving records aren\u2019t checked.'
       :'Season and lifetime bests: '+(_erErr?'couldn\u2019t load EagleRoster ('+esc(_erErr)+').':'loading from EagleRoster\u2026'))+'</div>'
     +'<div style="font-size:.7rem;margin-top:.25rem">Green = better. Swims show the time change (&minus;0.42 = 0.42 faster); dives show the score change.</div>';
 }
