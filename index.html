@@ -2001,7 +2001,23 @@ function updSwimmerPts(){
   var unk=all.filter(function(r){return r.noname||r.relay;});
   var unkPts=unk.reduce(function(a,r){return a+r.pts;},0),unkSw=unk.reduce(function(a,r){return a+r.swims.length;},0);
   var unkEv={};unk.forEach(function(r){r.swims.forEach(function(sw){unkEv[sw.ev.gender+' '+sw.ev.name]=1;});});
-  var list=all.filter(function(r){return !r.noname&&!r.relay;})
+  var list=all.filter(function(r){return !r.noname&&!r.relay;});
+  // UAA / NCAA: a team's divers are ranked as one "Diving" row with their combined points
+  if(S.scoringModel==='uaa'||S.scoringModel==='ncaa'){
+    var dive={},kept=[];
+    list.forEach(function(r){
+      var ds=r.swims.filter(function(sw){return isDiving(sw.ev);}),ss=r.swims.filter(function(sw){return !isDiving(sw.ev);});
+      if(ds.length){
+        var g=dive[r.team]||(dive[r.team]={name:'Diving',team:r.team,relay:false,noname:false,pts:0,swims:[],divers:{}});
+        ds.forEach(function(sw){g.pts+=sw.pts;g.swims.push({ev:sw.ev,place:sw.place,pts:sw.pts,diver:r.name});});
+        g.divers[r.name]=1;
+      }
+      if(ss.length)kept.push({name:r.name,team:r.team,relay:false,noname:false,swims:ss,pts:ss.reduce(function(a,sw){return a+sw.pts;},0)});
+    });
+    Object.keys(dive).forEach(function(t){var g=dive[t],n=Object.keys(g.divers).length;g.name='Diving ('+n+' diver'+(n===1?'':'s')+')';kept.push(g);});
+    list=kept;
+  }
+  list=list
     .sort(function(a,b){return grp(a)-grp(b)||b.pts-a.pts||a.name.localeCompare(b.name);});   // swimmers, then relays, then swims with no name
   function grp(r){return r.noname?2:r.relay?1:0;}
   if(!list.length&&!unk.length){box.innerHTML='<div style="color:var(--text-dim);font-size:.82rem;padding:.5rem 0">No scored results yet.</div>';return;}
@@ -2013,7 +2029,8 @@ function updSwimmerPts(){
     tot+=r.pts;
     var i=rn++;
     var sw=r.swims.sort(function(a,b){return a.ev.num-b.ev.num;}).map(function(s){
-      return '<div>'+esc(r.relay?s.ev.name.replace(/\s*Relay$/i,''):s.ev.name.replace(/\s*Relay$/i,' relay'))+' <span style="color:var(--text-dim);white-space:nowrap">'+ord(s.place)+' &middot; '+fmt(s.pts)+'</span></div>';}).join('');
+      return '<div>'+esc(r.relay?s.ev.name.replace(/\s*Relay$/i,''):s.ev.name.replace(/\s*Relay$/i,' relay'))+' <span style="color:var(--text-dim);white-space:nowrap">'+ord(s.place)+' &middot; '+fmt(s.pts)+'</span>'
+        +(s.diver?' <span style="color:var(--text-dim)">'+esc(s.diver.split(',')[0])+'</span>':'')+'</div>';}).join('');
     h+='<tr><td>'+(i<0?'':i+1)+'</td><td style="min-width:6.5rem;'+(r.relay||r.noname?'color:var(--text-dim)':'font-weight:500')+'">'+esc(r.name)+'</td>'
       +(SW_TEAM==='all'?'<td style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim)">'+esc(r.team)+'</td>':'')
       +'<td style="font-size:.72rem">'+sw+'</td><td style="text-align:right"><strong>'+fmt(r.pts)+'</strong></td></tr>';
