@@ -2205,6 +2205,13 @@ function updSwimmerPts(){
         .sort(function(a,b){return b.t-a.t||a.d.localeCompare(b.d);})
         .map(function(g,gi2){return '<div style="'+(gi2?'margin-top:.35rem;':'')+'font-weight:600;color:var(--text);display:flex;justify-content:space-between;gap:.5rem"><span>'+esc(g.d)+'</span><span>'+fmt(g.t)+'</span></div>'
           +'<div style="padding-left:.6rem">'+g.sw.sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('')+'</div>';}).join('');
+    } else if(!r.relay&&!r.noname){
+      // Swimmer row: individual swims and relay legs, each with its own subtotal
+      sw=[['Individual',r.swims.filter(function(s){return !s.leg;})],['Relays',r.swims.filter(function(s){return s.leg;})]]
+        .filter(function(g){return g[1].length;})
+        .map(function(g,gi2){var t=g[1].reduce(function(a,s){return a+s.pts;},0);
+          return '<div style="'+(gi2?'margin-top:.35rem;':'')+'font-weight:600;color:var(--text);display:flex;justify-content:space-between;gap:.5rem"><span>'+g[0]+'</span><span>'+fmt(t)+'</span></div>'
+            +'<div style="padding-left:.6rem">'+g[1].sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('')+'</div>';}).join('');
     } else sw=r.swims.sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('');
     h+='<tr><td>'+(i<0?'':i+1)+'</td><td style="min-width:6.5rem;'+(r.relay||r.noname?'color:var(--text-dim)':'font-weight:500')+'">'+esc(r.name)+'</td>'
       +(SW_TEAM==='all'?'<td style="font-family:var(--fm);font-size:.72rem;color:var(--text-dim)">'+esc(r.team)+'</td>':'')
