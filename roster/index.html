@@ -246,7 +246,6 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
   .pcols{column-count:3;column-gap:10px;}
   .pcols.pcols2{column-count:2;column-gap:16px;}
   table.pt{width:100%;border-collapse:collapse;font-size:9px;margin:0 0 5px;break-inside:avoid;}
-  table.pt.mh{table-layout:fixed;margin:0;} table.pt.mh td.n{width:auto;max-width:none;} table.pt.mhh{break-after:avoid;}
   table.pt th{text-align:left;font-size:9.5px;border-bottom:1px solid #000;padding:1px 2px;}
   table.pt td{padding:0 2px;white-space:nowrap;border-bottom:1px solid #e5e5e5;line-height:1.35;}
   table.pt{table-layout:auto;}
@@ -259,8 +258,6 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
   .lug{display:grid;grid-auto-flow:column;grid-template-rows:repeat(3,auto);grid-auto-columns:minmax(0,1fr);column-gap:8px;} .lug>div,.lue-b>div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} .lul{display:inline-block;width:16px;color:#555;font-size:8px;}
   .lue-h{font-size:9.5px;font-weight:700;border-bottom:1px solid #000;margin:6px 0 2px;} .lue-r{display:flex;gap:4px;font-size:8.5px;line-height:1.35;border-bottom:1px solid #e5e5e5;break-inside:avoid;} .lue-i{width:14px;text-align:right;color:#555;} .lue-n{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} .lue-c{white-space:nowrap;} table.pt.lu td.n{max-width:none;width:auto;} table.pt.lue td:last-child{white-space:normal;}
   table.pt td.pbt{font-weight:800;}
-  table.pt.mh{font-size:9.5px;} table.pt.mh td.n{width:auto;max-width:none;} table.pt.mh .c{text-align:center;width:46px;}
-  table.pt.mh tr.mhev td{border-top:1px solid #999;}
   .pbm.vrm{background:#000;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .pbm.stdm{border-radius:50%;min-width:8px;text-align:center;}
   .pbm.d3m{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -543,7 +540,7 @@ new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh'
       <button class="btn bsm" onclick="document.getElementById('uaaFile').click()" title="USA Swimming top-times report filtered to the UAA (PDF); gender comes from the file name">&#8679; UAA</button>
       <input type="file" id="uaaFile" accept=".pdf" multiple style="display:none" onchange="loadUaaRanks(this.files).finally(()=>{this.value=''})">
       <button class="btn bsm" onclick="printTopTimes()">&#128424; Print</button>
-      <button class="btn bsm" onclick="printTopTimesPack()" title="Meet highlights for the latest meet (women, men), then women then men: by name (all swims), by event (best per code), relay splits (best per code) — all codes, this season">&#128424; Post-meet pack</button>
+      <button class="btn bsm" onclick="printTopTimesPack()" title="Women then men: by name (all swims), by event (best per code), relay splits (best per code) — all codes, this season">&#128424; Post-meet pack</button>
     </div>
   </div>
   <div id="d3Status" style="font-size:.72rem;font-family:var(--fm);color:var(--text-dim);margin:-.25rem 0 .75rem"></div>
@@ -2055,90 +2052,6 @@ function ttRelayPrintHtml() {
      <div class="pcols pcols2">${body}</div>`;
 }
 
-// ── MEET HIGHLIGHTS (first page of the post-meet pack) ─────────────────────
-// The most recently uploaded meet: every Emory swim (individual and relay lead-off) that was a lifetime best,
-// a season best for its own code, a season best overall, an NCAA A / Q / B time, or a varsity record.
-// Only the best swim per athlete per event at the meet is checked; anything that hit nothing is left off.
-function meetHighlightsMeet() {
-  const last = (R.meets || []).find(m => (R.swims || []).some(s => s.mkey === m.key || (s.meet === m.name && s.date === m.date)));
-  if (!last) return null;
-  // A multi-day meet is stored one day at a time: take every day of it (same name, within a week)
-  const d0 = new Date(last.date + 'T12:00:00'); d0.setDate(d0.getDate() - 7);
-  const from = d0.toISOString().slice(0, 10);
-  const days = (R.meets || []).filter(m => m.name === last.name && m.date >= from && m.date <= last.date);
-  const keys = new Set(days.map(m => m.key)), dates = days.map(m => m.date).sort();
-  return { name: last.name, start: dates[0], end: dates[dates.length - 1], keys, codes: [...new Set(days.map(m => m.code || 'U'))] };
-}
-
-function meetHighlights(g, M) {
-  M = M || meetHighlightsMeet();
-  if (!M) return null;
-  const inMeet = s => M.keys.has(s.mkey) || (s.meet === M.name && s.date >= M.start && s.date <= M.end);
-  const season = seasonOf(M.start);
-  const vr = recordSwimIds();
-  const pendingVr = new Set();
-  recordCandidates().filter(c => c.scope === 'team').forEach(c => c.chain.forEach(s => pendingVr.add(s.id)));
-  const better = (ev, a, b) => isDive(ev) ? parseFloat(a) > parseFloat(b) : timeToSec(a) < timeToSec(b);
-  const swims = (R.swims || []).filter(s => s.kind === 'ind' && R.swimmers[s.sid] && R.swimmers[s.sid].gender === g);
-  // Best swim per athlete per event at this meet
-  const best = {};
-  swims.filter(inMeet).forEach(s => {
-    const k = s.sid + '|' + s.event, b = best[k];
-    if (!b || better(s.event, s.time, b.time)) best[k] = s;
-  });
-  const rows = [];
-  Object.values(best).forEach(s => {
-    const k = s.sid + '|' + s.event;
-    const prior = swims.filter(x => x.sid + '|' + x.event === k && !inMeet(x) && x.date < M.start && seasonOf(x.date) === season);
-    const beats = list => list.every(x => better(s.event, s.time, x.time));
-    const h = {
-      ltb: !!s.pb,
-      sbCode: beats(prior.filter(x => x.code === s.code)),
-      sb: beats(prior),
-      ncaa: ncaaMark(s),
-      vr: vr.has(s.id) ? 'VR' : pendingVr.has(s.id) ? 'VR?' : '',
-    };
-    if (h.ltb || h.sbCode || h.sb || h.ncaa || h.vr) rows.push({ s, h, first: !prior.length });
-  });
-  const ord = ev => { const i = TT_ORDER.indexOf(ev); return i < 0 ? 99 : i; };
-  const nm = sid => { const w = R.swimmers[sid]; return (w.last + ' ' + w.first).toLowerCase(); };
-  rows.sort((a, b) => ord(a.s.event) - ord(b.s.event) || (better(a.s.event, a.s.time, b.s.time) ? -1 : better(a.s.event, b.s.time, a.s.time) ? 1 : nm(a.s.sid).localeCompare(nm(b.s.sid))));
-  return { M, rows };
-}
-
-function meetHighlightsPrintHtml(g, M) {
-  const H = meetHighlights(g, M);
-  const gl = g === 'W' ? 'Women' : 'Men';
-  if (!H) return `<div class="ph"><b>Emory Swimming &amp; Diving — ${gl}'s Meet Highlights</b> &nbsp;no meets uploaded yet</div>`;
-  const { M: m, rows } = H;
-  const md = d => `${+d.slice(5,7)}/${+d.slice(8,10)}`;
-  const when = m.start === m.end ? md(m.start) + '/' + m.start.slice(0, 4) : `${md(m.start)}–${md(m.end)}/${m.end.slice(0, 4)}`;
-  const n = f => rows.filter(f).length;
-  const tally = [`${n(r => r.h.ltb)} LTB`, `${n(r => r.h.sbCode)} SB in code`, `${n(r => r.h.sb)} SB overall`,
-    `${n(r => r.h.ncaa === 'A')} A`, `${n(r => r.h.ncaa === 'Q')} Q`, `${n(r => r.h.ncaa === 'B')} B`,
-    `${n(r => r.h.vr === 'VR')} VR`].concat(n(r => r.h.vr === 'VR?') ? [`${n(r => r.h.vr === 'VR?')} VR awaiting approval`] : []).join(' · ');
-  const ck = v => v ? '&#10003;' : '';
-  let lastEv = '';
-  const rowHtml = ({ s, h, first }) => {
-    const w = R.swimmers[s.sid], evCell = s.event !== lastEv ? `<b>${esc(s.event)}</b>` : '';
-    lastEv = s.event;
-    return `<tr${evCell ? ' class="mhev"' : ''}><td>${evCell}</td><td class="n">${esc(w.first)} ${esc(w.last)} <span class="pc">${classOf(w) || ''}</span></td>` +
-      `<td class="r${h.ltb ? ' pbt' : ''}">${esc(s.time)}${s.lo ? '<sup>LO</sup>' : ''}</td>` +
-      `<td class="c">${ck(h.ltb)}</td><td class="c">${h.sbCode ? s.code + (first ? '<sup>1st</sup>' : '') : ''}</td><td class="c">${ck(h.sb)}</td>` +
-      `<td class="c">${h.ncaa ? `<span class="pbm stdm">${h.ncaa}</span>` : ''}</td><td class="c">${h.vr ? `<span class="pbm vrm">${h.vr}</span>` : ''}</td></tr>`;
-  };
-  // One small table per event (kept whole) under a single header row, so the list starts right under the
-  // heading and pages break between events in every browser; fixed columns keep the tables lined up.
-  const cols = '<colgroup><col style="width:11%"><col style="width:37%"><col style="width:12%"><col style="width:7%"><col style="width:12%"><col style="width:7%"><col style="width:7%"><col style="width:7%"></colgroup>';
-  const groups = [];
-  rows.forEach(r => { const g = groups[groups.length - 1]; if (g && g.ev === r.s.event) g.rows.push(r); else groups.push({ ev: r.s.event, rows: [r] }); });
-  const body = groups.map(g => `<table class="pt mh">${cols}<tbody>${g.rows.map(rowHtml).join('')}</tbody></table>`).join('');
-  return `<div class="ph"><b>Emory Swimming &amp; Diving — ${gl}'s Meet Highlights: ${esc(m.name)}</b> &nbsp;${when} · ${m.codes.join('/')} · printed ${new Date().toLocaleDateString()}</div>
-     <div class="pm">${tally} &nbsp;|&nbsp; Best swim per athlete per event; swims that hit nothing are left off. LTB = lifetime best · SB (code) = fastest this season among swims of the same code (U / UwS / S); 1st = first swim of the season in that code · SB = fastest this season, any code · NCAA: A = 2027 A cut, Q = 2026 invited time, B = 2027 B cut (highest shown) · VR = varsity record (VR? = not yet approved) · LO = relay lead-off</div>
-     ${rows.length ? `<table class="pt mh mhh">${cols}<thead><tr><th>Event</th><th>Swimmer</th><th class="r">Time</th><th class="c">LTB</th><th class="c">SB (code)</th><th class="c">SB</th><th class="c">NCAA</th><th class="c">VR</th></tr></thead></table>${body}`
-       : '<div class="pm">No lifetime bests, season bests, NCAA times or records at this meet.</div>'}`;
-}
-
 // After a meet: by name (all swims), by event (best per code), relay splits (best per code) — women then men,
 // all rest codes, the selected season. One print job, each report on its own page; the screen view is restored.
 const TT_PACK = [['W','ind','name',true], ['W','ind','event','code'], ['W','split','event','code'],
@@ -2152,8 +2065,6 @@ function printTopTimesPack() {
   });
   Object.assign(_tt, keep);
   renderTopTimes();
-  const hm = meetHighlightsMeet();
-  parts.unshift(meetHighlightsPrintHtml('W', hm), meetHighlightsPrintHtml('M', hm));
   document.getElementById('ttPrint').innerHTML = parts.map(p => `<div class="ttpack">${p}</div>`).join('');
   appPrint('ttPrint', 'Post-meet reports');
 }
