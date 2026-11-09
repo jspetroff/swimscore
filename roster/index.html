@@ -229,7 +229,8 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
   @page { margin: .5in; }
   :root{--bg:#fff;--bg2:#fff;--bg3:#fff;--border:#bbb;--text:#000;--text-dim:#333;--gold:#000;--green:#000;--blue:#000;--purple:#000;}
   body{background:#fff;color:#000;font-size:10px;}
-  .hdr,.tabs,.fbar,.no-print,.sec-hdr,#ttHelp,#loginScreen,.modal{display:none!important;}
+  .hdr,.tabs,.fbar,.no-print,.sec-hdr,#ttHelp,#loginScreen,.modal,.modsw,#d3Status{display:none!important;}
+  .topfix{position:static!important;}
   .print-only{display:block!important;}
   body.ptags #appRoot{display:none!important;}
   body.ptags #tagPrint{display:flex!important;flex-direction:column;align-items:flex-start;}
@@ -245,7 +246,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
   .pcols{column-count:3;column-gap:10px;}
   .pcols.pcols2{column-count:2;column-gap:16px;}
   table.pt{width:100%;border-collapse:collapse;font-size:9px;margin:0 0 5px;break-inside:avoid;}
-  table.pt.mh{break-inside:auto;} table.pt.mh tr{break-inside:avoid;} table.pt.mh thead{display:table-header-group;}
+  table.pt.mh{table-layout:fixed;margin:0;} table.pt.mh td.n{width:auto;max-width:none;} table.pt.mhh{break-after:avoid;}
   table.pt th{text-align:left;font-size:9.5px;border-bottom:1px solid #000;padding:1px 2px;}
   table.pt td{padding:0 2px;white-space:nowrap;border-bottom:1px solid #e5e5e5;line-height:1.35;}
   table.pt{table-layout:auto;}
@@ -2118,17 +2119,23 @@ function meetHighlightsPrintHtml(g, M) {
     `${n(r => r.h.vr === 'VR')} VR`].concat(n(r => r.h.vr === 'VR?') ? [`${n(r => r.h.vr === 'VR?')} VR awaiting approval`] : []).join(' · ');
   const ck = v => v ? '&#10003;' : '';
   let lastEv = '';
-  const body = rows.map(({ s, h, first }) => {
+  const rowHtml = ({ s, h, first }) => {
     const w = R.swimmers[s.sid], evCell = s.event !== lastEv ? `<b>${esc(s.event)}</b>` : '';
     lastEv = s.event;
     return `<tr${evCell ? ' class="mhev"' : ''}><td>${evCell}</td><td class="n">${esc(w.first)} ${esc(w.last)} <span class="pc">${classOf(w) || ''}</span></td>` +
       `<td class="r${h.ltb ? ' pbt' : ''}">${esc(s.time)}${s.lo ? '<sup>LO</sup>' : ''}</td>` +
       `<td class="c">${ck(h.ltb)}</td><td class="c">${h.sbCode ? s.code + (first ? '<sup>1st</sup>' : '') : ''}</td><td class="c">${ck(h.sb)}</td>` +
       `<td class="c">${h.ncaa ? `<span class="pbm stdm">${h.ncaa}</span>` : ''}</td><td class="c">${h.vr ? `<span class="pbm vrm">${h.vr}</span>` : ''}</td></tr>`;
-  }).join('');
+  };
+  // One small table per event (kept whole) under a single header row, so the list starts right under the
+  // heading and pages break between events in every browser; fixed columns keep the tables lined up.
+  const cols = '<colgroup><col style="width:11%"><col style="width:37%"><col style="width:12%"><col style="width:7%"><col style="width:12%"><col style="width:7%"><col style="width:7%"><col style="width:7%"></colgroup>';
+  const groups = [];
+  rows.forEach(r => { const g = groups[groups.length - 1]; if (g && g.ev === r.s.event) g.rows.push(r); else groups.push({ ev: r.s.event, rows: [r] }); });
+  const body = groups.map(g => `<table class="pt mh">${cols}<tbody>${g.rows.map(rowHtml).join('')}</tbody></table>`).join('');
   return `<div class="ph"><b>Emory Swimming &amp; Diving — ${gl}'s Meet Highlights: ${esc(m.name)}</b> &nbsp;${when} · ${m.codes.join('/')} · printed ${new Date().toLocaleDateString()}</div>
      <div class="pm">${tally} &nbsp;|&nbsp; Best swim per athlete per event; swims that hit nothing are left off. LTB = lifetime best · SB (code) = fastest this season among swims of the same code (U / UwS / S); 1st = first swim of the season in that code · SB = fastest this season, any code · NCAA: A = 2027 A cut, Q = 2026 invited time, B = 2027 B cut (highest shown) · VR = varsity record (VR? = not yet approved) · LO = relay lead-off</div>
-     ${rows.length ? `<table class="pt mh"><thead><tr><th>Event</th><th>Swimmer</th><th class="r">Time</th><th class="c">LTB</th><th class="c">SB (code)</th><th class="c">SB</th><th class="c">NCAA</th><th class="c">VR</th></tr></thead><tbody>${body}</tbody></table>`
+     ${rows.length ? `<table class="pt mh mhh">${cols}<thead><tr><th>Event</th><th>Swimmer</th><th class="r">Time</th><th class="c">LTB</th><th class="c">SB (code)</th><th class="c">SB</th><th class="c">NCAA</th><th class="c">VR</th></tr></thead></table>${body}`
        : '<div class="pm">No lifetime bests, season bests, NCAA times or records at this meet.</div>'}`;
 }
 
