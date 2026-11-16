@@ -250,7 +250,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Pocket card: same look as the full sheet, laid out at its printed size */
-.cspage.pkm{width:404px;height:500px;column-gap:6px;}
+.cspage.pkm{width:528px;height:500px;column-gap:8px;}
 .cspage.pkm .cst tr.sp td{height:.3em;} .cspage.pkm .cst td{line-height:1.15;}
 .csh2{margin-top:.3em;}
 .cspage.pkm .csh,.cspage.pkm .cstitle{font-size:8px;}
@@ -259,8 +259,8 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cspage.pkm .cstabs{gap:4px;}
 .cspage.pkm .csn,.cspage.pkm .csn tr.top td{border-width:1px;}
 .pocket{page:pocketpg;width:768px;height:1004px;display:flex;flex-direction:column;align-items:center;background:#fff;}
-.pk{width:406px;border:1px dashed #666;}
-.pkpanel{width:404px;height:500px;overflow:hidden;position:relative;}
+.pk{width:530px;border:1px dashed #666;}
+.pkpanel{width:528px;height:500px;overflow:hidden;position:relative;}
 .pkpanel+.pkpanel{border-top:1px dotted #666;}
 .pkpanel>.cspage{position:absolute;left:0;top:0;}
 .pkpanel.inv{transform:rotate(180deg);}
@@ -3071,7 +3071,7 @@ function printCheerSheet() {
 window.addEventListener('afterprint', () => document.body.classList.remove('pcheer'));
 
 // Pocket card: the front and back pages at half size on one sheet, the back upside down, so it can be cut
-// out and folded top to bottom into a two-sided card (about 3.75 x 5 in folded).
+// out and folded top to bottom into a two-sided card (about 5.5 x 5.2 in folded).
 function printPocketCard() {
   const err = buildCheerPrint(true);
   const st = document.getElementById('reportStatus');
