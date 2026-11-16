@@ -235,10 +235,16 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cst td.ev{font-weight:700;} .cst td.ec{font-weight:700;text-align:center;} .cst td.tc{text-align:center;}
 .cst td.nm{width:99%;}
 .cst tr.sp td{background:#fff;height:.6em;padding:0;}
-.cst td.nev{vertical-align:middle;text-align:center;background:#fff;border:1px solid #bbb;}
-.csn td{background:#fff;border:1px solid #bbb;} .csn td.nm{width:auto;}
+.csn{border:1.5px solid #1f3a93;}
+.csn td{border:0;border-bottom:1px solid #fff;padding:.12em .5em;line-height:1.3;}
+.csn tr.b1 td{background:#dae3f3;} .csn tr.b2 td{background:#fff;}
+.csn tr.top td{border-top:1.5px solid #1f3a93;}
+.csn td.nev{vertical-align:middle;text-align:left;font-weight:700;white-space:nowrap;border-right:1px solid #9fb3d9;}
+.csn td.nl{color:#333;white-space:nowrap;width:auto;}
+.csn td.nt{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap;}
+
 .cstabs{display:flex;gap:8px;align-items:stretch;}
-.csnw{flex:1 1 auto;min-width:0;} .csn td{padding:.15em .4em;} .csright{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.csnw{flex:1 1 auto;min-width:0;} .csright{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;}
 .csp td{min-width:2.2em;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -2949,9 +2955,9 @@ function csNcaaTable(yr) {
                  ['Q 16th', (g, e) => q16[g + '|' + e] || ''], ['Q', (g, e) => ((NCAA_STD[g] || {})[e] || [])[2] || '']]
     .filter(([, f]) => evs.some(e => f('W', e) || f('M', e)));
   if (!lines.length) return '';
-  const lab = l => (l === 'Q' ? (qy ? qy + ' ' : '') : (y ? y + ' ' : '')) + l;
-  return `<table class="cst csn"><tr><th colspan="2">${esc(yr || '')} NCAA</th><th>W</th><th>M</th></tr>` + evs.map(e =>
-    lines.map(([l, f], i) => `<tr>${i ? '' : `<td class="ev nev" rowspan="${lines.length}">${esc(e)}</td>`}<td class="nm">${esc(lab(l))}</td><td class="tc">${esc(csTime(f('W', e)))}</td><td class="tc">${esc(csTime(f('M', e)))}</td></tr>`).join('')
+  const lab = l => l === 'Q' && qy && qy !== y ? `Q ('${qy})` : l;
+  return `<table class="cst csn"><tr><th colspan="2">${esc(yr || '')} NCAA</th><th>Women</th><th>Men</th></tr>` + evs.map((e, k) =>
+    lines.map(([l, f], i) => `<tr class="${k % 2 ? 'b2' : 'b1'}${i ? '' : ' top'}">${i ? '' : `<td class="nev" rowspan="${lines.length}">${esc(e)}</td>`}<td class="nl">${esc(lab(l))}</td><td class="nt">${esc(csTime(f('W', e)))}</td><td class="nt">${esc(csTime(f('M', e)))}</td></tr>`).join('')
   ).join('') + '</table>';
 }
 
