@@ -4119,7 +4119,9 @@ async function appPdf(id, name) {
       const top = b.getBoundingClientRect().top, h = Math.ceil(b.scrollHeight || b.getBoundingClientRect().height);
       // page breaks only between rows/lines, never through one
       const cuts = [...new Set([...b.querySelectorAll('tr,.lue,.lue-r,.rtag,.ph,.pm,table,.card')].map(e => Math.round(e.getBoundingClientRect().bottom - top)))].sort((x, y) => x - y);
-      const scale = 2, canvas = await window.html2canvas(b, { scale, backgroundColor: '#ffffff', windowWidth: W, logging: false });
+      // the pocket card's tiny type needs a sharper, lossless image (4x stays under iPhone's canvas limit)
+      const fine = !!(b.matches('.pocket') || b.querySelector('.pocket'));
+      const scale = fine ? 4 : 2, canvas = await window.html2canvas(b, { scale, backgroundColor: '#ffffff', windowWidth: W, logging: false });
       let y0 = 0;
       while (y0 < h - 2) {
         let y1 = Math.min(h, y0 + H);
@@ -4128,7 +4130,7 @@ async function appPdf(id, name) {
         slice.width = canvas.width; slice.height = Math.ceil((y1 - y0) * scale);
         slice.getContext('2d').drawImage(canvas, 0, Math.floor(y0 * scale), canvas.width, slice.height, 0, 0, canvas.width, slice.height);
         if (!first) pdf.addPage(); first = false;
-        pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', 0.5, 0.5, 7.5, 7.5 * slice.height / slice.width);
+        pdf.addImage(fine ? slice.toDataURL('image/png') : slice.toDataURL('image/jpeg', 0.92), fine ? 'PNG' : 'JPEG', 0.5, 0.5, 7.5, 7.5 * slice.height / slice.width);
         y0 = y1;
       }
     }
