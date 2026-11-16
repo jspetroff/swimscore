@@ -2580,13 +2580,13 @@ function psychColumnLines(pages) {
 // "Event 3 Women 500 Yard Freestyle" headers (relays skipped), rows "1 Liu, Meredith SR Emory University 4:55.04 ..."
 const PSYCH_STROKE = { freestyle:'FS', backstroke:'BK', breaststroke:'BR', butterfly:'FL', im:'IM', 'individual medley':'IM' };
 function parsePsychSheet(lines) {
-  const out = { meet: '', entries: {}, warnings: [] };
+  const out = { meet: '', entries: {}, order: {}, warnings: [] };
   let cur = null;
   lines.forEach((line, i) => {
     if (!out.meet && /Psych Sheet/i.test(line) && i >= 2) out.meet = lines[i - 2].trim();
-    const h = line.match(/^(?:Event\s+|#)\d+\s+(?:\.\.\.\s*\()?\s*(Women|Men|Girls|Boys)\s+(.+?)\)?\s*$/i);
+    const h = line.match(/^(?:Event\s+|#)(\d+)\s+(?:\.\.\.\s*\()?\s*(Women|Men|Girls|Boys)\s+(.+?)\)?\s*$/i);
     if (h) {
-      const g = /^(Women|Girls)/i.test(h[1]) ? 'W' : 'M', rest = h[2];
+      const g = /^(Women|Girls)/i.test(h[2]) ? 'W' : 'M', rest = h[3];
       let ev = null;
       const sw = rest.match(/^(\d+)\s+Yard\s+(.+)$/i);
       const dv = rest.match(/(\d)\s*(?:mtr|meter|m)\b.*Diving/i);
@@ -2596,6 +2596,7 @@ function parsePsychSheet(lines) {
       else out.warnings.push('Skipped event: ' + line);
       cur = ev ? g + '|' + ev : null;
       if (cur && !out.entries[cur]) out.entries[cur] = [];
+      if (cur && !(cur in out.order)) out.order[cur] = +h[1];
       return;
     }
     if (!cur) return;
@@ -2629,7 +2630,7 @@ async function loadEntries(file) {
     res.meet = parsePsychSheet(tmItemsToLines(pages)).meet || res.meet;   // the title spans the columns
     const n = Object.values(res.entries).reduce((a, l) => a + l.length, 0);
     if (!n) throw new Error('No individual entries found — is this a Meet Manager psych sheet?');
-    R.reportEntries = { meet: res.meet, file: file.name, loaded: new Date().toISOString().slice(0, 10), entries: res.entries };
+    R.reportEntries = { meet: res.meet, file: file.name, loaded: new Date().toISOString().slice(0, 10), entries: res.entries, order: res.order };
     resolveEntries();
     save();
     document.getElementById('repLimit').value = 'entries';
@@ -2745,7 +2746,16 @@ function generateReport() {
 
   const rows = [];
   const genders = gender === 'all' ? ['W', 'M'] : [gender];
-  genders.forEach(g => selectedEvents.forEach(ev => {
+  const sched = reportSchedule(useEntries), psychNo = useEntries ? (ent.order || {}) : {};
+  const blocks = [];
+  selectedEvents.forEach(ev => genders.forEach(g => blocks.push({ g, ev, day: sched ? champDay(sched, g, ev) : null })));
+  // By day, then meet order (the schedule's order, else the psych sheet's event numbers), women before men
+  const pick = (g, ev) => selectedEvents.indexOf(ev) * 2 + (g === 'W' ? 0 : 1);
+  blocks.sort((a, b) => (a.day || 99) - (b.day || 99) ||
+    (sched ? champOrder(sched, a.g, a.ev) - champOrder(sched, b.g, b.ev) : 0) ||
+    ((psychNo[a.g + '|' + a.ev] || 999) - (psychNo[b.g + '|' + b.ev] || 999)) ||
+    (a.ev === b.ev ? (a.g === 'W' ? -1 : 1) : pick(a.g, a.ev) - pick(b.g, b.ev)));
+  blocks.forEach(({ g, ev, day }) => {
     const dive = isDive(ev);
     // who's listed: everyone with a time in this event this season, fastest first (optionally top N)
     let inEvent;
@@ -2764,7 +2774,7 @@ function generateReport() {
     inEvent.forEach(({ s, t, seed }, i) => {
       const drop = t.prior && t.sbt && !dive ? timeToSec(t.prior) - timeToSec(t.sbt) : null;
       rows.push({
-        first: i === 0, last: i === inEvent.length - 1, event: ev, g,
+        first: i === 0, last: i === inEvent.length - 1, event: ev, g, day,
         name: s.first + ' ' + s.last,
         ltbt: t.ltbt, sbt: t.sbt + (t.sbSwim && t.sbSwim.lo ? ' (LO)' : ''),
         afinal: refFor(aFinal, g, ev), bfinal: refFor(bFinal, g, ev), ncaarec: ((R.ncaaRecords || []).find(r => r.g === g && r.ev === ev) || {}).time || '',
@@ -2776,7 +2786,7 @@ function generateReport() {
         pct: drop == null ? '' : ((drop / timeToSec(t.prior)) * 100).toFixed(2) + '%'
       });
     });
-  }));
+  });
 
   if (!rows.length) { document.getElementById('reportStatus').innerHTML='<div class="st sterr">No swimmers have times in the selected events this season.</div>'; return; }
 
@@ -2784,11 +2794,12 @@ function generateReport() {
     ncaarec:'NCAA Rec', vr:'EU VR', cutA:'NCAA A', cutB:'NCAA B', cutQ:'2026 Invite', std:'Std',
     seed:'Seed', prior:'Best before season', drop:'Drop (s)', pct:'% Drop', entries:'# Swims' };
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const headers = [...(_currentReport === 'ncaa_cheer' ? ['Day'] : []), ...(gender === 'all' ? ['Gender'] : []), 'Event', 'Racer', ...selectedCols.map(c => colMap[c] || c)];
+  const showDay = rows.some(r => r.day);
+  const headers = [...(showDay ? ['Day'] : []), ...(gender === 'all' ? ['Gender'] : []), 'Event', 'Racer', ...selectedCols.map(c => colMap[c] || c)];
   const csvRows = [headers.map(q).join(',')];
   rows.forEach(r => {
     csvRows.push([
-      ...(_currentReport === 'ncaa_cheer' ? [r.first ? ((d => d ? 'Day ' + d : '')(champDay('NCAA', r.g, r.event))) : ''] : []),
+      ...(showDay ? [r.first && r.day ? 'Day ' + r.day : ''] : []),
       ...(gender === 'all' ? [r.first ? (r.g === 'W' ? 'Women' : 'Men') : ''] : []),
       r.first ? r.event : '', r.name, ...selectedCols.map(c => r[c])
     ].map(q).join(','));
@@ -2824,8 +2835,29 @@ const CHAMP_DAYS = {
       '100 BK':3, '100 BR':3, '200 FL':3, '200 MR Relay':3, '800 FR Relay':3,
       '100 FS':4, '1650 FS':4, '200 BK':4, '200 BR':4, '400 FR Relay':4 },
     dive: { M: { '3m Springboard':1, '1m Springboard':3 }, W: { '1m Springboard':2, '3m Springboard':4 } }
+  },
+  // Denison Invitational (2026 packet): Thu / Fri / Sat, events listed in meet order
+  DENISON: {
+    swim: { '200 FR Relay':1, '500 FS':1, '200 IM':1, '50 FS':1, '400 MR Relay':1,
+      '200 MR Relay':2, '400 IM':2, '100 FL':2, '200 FS':2, '100 BR':2, '100 BK':2, '800 FR Relay':2,
+      '1650 FS':3, '200 BK':3, '100 FS':3, '200 BR':3, '200 FL':3, '400 FR Relay':3 },
+    dive: { M: { '3m Springboard':2, '1m Springboard':3 }, W: { '1m Springboard':2, '3m Springboard':3 } }
   }
 };
+// Which schedule a cheer sheet follows: the uploaded psych sheet's meet name, else the NCAA sheet uses NCAA days
+function reportSchedule(useEntries) {
+  const ent = R.reportEntries, nm = useEntries && ent ? (ent.meet || '') + ' ' + (ent.file || '') : '';
+  if (/denison/i.test(nm)) return 'DENISON';
+  if (/\bUAA\b|University Athletic/i.test(nm)) return 'UAA';
+  if (/NCAA/i.test(nm)) return 'NCAA';
+  return !nm && _currentReport === 'ncaa_cheer' ? 'NCAA' : null;
+}
+// Position of an event within its day, in meet order (diving after the day's swims)
+function champOrder(meet, g, ev) {
+  const t = CHAMP_DAYS[meet]; if (!t) return 999;
+  if (isDive(ev)) return 100 + Object.keys(t.dive[g] || {}).indexOf(ev);
+  const i = Object.keys(t.swim).indexOf(ev); return i < 0 ? 999 : i;
+}
 function champDay(meet, g, ev) {
   const t = CHAMP_DAYS[meet]; if (!t) return null;
   return isDive(ev) ? ((t.dive[g] || {})[ev] || null) : (t.swim[ev] || null);
