@@ -1053,7 +1053,8 @@ function parsePasted(){
 //  UAA     — "#7 Women 500 Yard Freestyle", rows "1 Last, First SO EMOR-GA 4:55.44 Q25" (standard after the
 //            time, often blank), relays "2 EMOR-GA A 7:26.16 Q25", diving scores, NT/NP seeds
 function parseSheet(raw){
-  var ELIG={FR:1,SO:1,JR:1,SR:1,GRAD:1,GR:1,GS:1,FY:1,'5TH':1,'5Y':1,'6Y':1};
+  var ELIG={FR:1,SO:1,JR:1,SR:1,GRAD:1,GR:1,GS:1,G:1,FY:1,'5TH':1,'5Y':1,'6Y':1,
+            F0:1,S0:1};   // G = grad student; S0/F0 = the letter O typed as a zero on some psych sheets
   var STD={B:1,BB:1,A:1,AA:1,AAA:1,AAAA:1,NS:1,NT:1};
   function isTime(s){return /^\d{1,2}:\d{2}\.\d{2}$/.test(s)||/^\d{2,3}\.\d{2}$/.test(s);}
   function skipLine(l){
@@ -1092,6 +1093,7 @@ function parseSheet(raw){
       // seed = last time/score/NT/NP; anything after it is the qualifying standard (Q25, D3A, D3B…)
       var s=-1;
       for(var k=tok.length-1;k>=1;k--){if(isTime(tok[k])||/^(NT|NP)$/i.test(tok[k])){s=k;break;}}
+      if(s<0)continue;                                                   // no seed time: a title/header line, not a swimmer
       if(s<2||s<tok.length-2){missed.push(cur.gender+' '+cur.name+': '+line);continue;}
       var seed=/^(NT|NP)$/i.test(tok[s])?'':tok[s],std=tok[s+1]||(seed?'':tok[s].toUpperCase());
       if(cur.isRelay){
@@ -1103,6 +1105,7 @@ function parseSheet(raw){
       } else {
         var ei=-1,yr='',pre=null;
         for(var t1=2;t1<s;t1++){if(ELIG[tok[t1].toUpperCase()]){ei=t1;yr=tok[t1].toUpperCase();break;}}
+        if(yr==='S0')yr='SO';else if(yr==='F0')yr='FR';
         if(ei<0){   // long name runs into the year: "Monera Cabarique, SheilaJR CWRU 24.09"
           for(var t2=2;t2<s;t2++){var gm=tok[t2].match(/^(.*[a-z.'])(FR|SO|JR|SR|GS|GR|FY)$/);if(gm){ei=t2;yr=gm[2];pre=gm[1];break;}}
         }
