@@ -249,6 +249,13 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .csp td{min-width:2.2em;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.pocket{width:720px;height:958px;display:flex;flex-direction:column;align-items:center;background:#fff;}
+.pk{width:355px;border:1px dashed #666;}
+.pkpanel{width:353px;height:470px;overflow:hidden;position:relative;}
+.pkpanel+.pkpanel{border-top:1px dotted #666;}
+.pkpanel>.cspage{position:absolute;left:0;top:0;transform:scale(.49);transform-origin:0 0;}
+.pkpanel.inv{transform:rotate(180deg);}
+.pknote{font:9px Arial,sans-serif;color:#666;margin-top:4px;}
 /* Print */
 .print-only,.code-print{display:none;}
 @media print {
@@ -521,6 +528,7 @@ new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh'
       </div>
       <div style="display:flex;gap:.5rem;margin-top:1rem">
         <button class="btn bprimary" style="flex:1;padding:.75rem" onclick="printCheerSheet()">&#128424; Print / PDF</button>
+        <button class="btn" style="flex:1;padding:.75rem" onclick="printPocketCard()" title="Front and back at half size on one sheet, back upside down: cut out and fold">&#9986; Pocket card</button>
         <button class="btn" style="flex:1;padding:.75rem" onclick="generateReport()">&#8681; Download Excel</button>
       </div>
       <div id="reportStatus" style="margin-top:.5rem"></div>
@@ -3029,6 +3037,24 @@ function printCheerSheet() {
   appPrint('cheerPrint', 'Cheer Sheet');
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('pcheer'));
+
+// Pocket card: the front and back pages at half size on one sheet, the back upside down, so it can be cut
+// out and folded top to bottom into a two-sided card (about 3.75 x 5 in folded).
+function printPocketCard() {
+  const err = buildCheerPrint();
+  const st = document.getElementById('reportStatus');
+  if (err) { st.innerHTML = `<div class="st sterr">${esc(err)}</div>`; return; }
+  const el = document.getElementById('cheerPrint'), pages = [...el.querySelectorAll('.cspage')];
+  if (pages.length > 2) { st.innerHTML = `<div class="st sterr">This sheet runs ${pages.length} pages; the pocket card holds a front and a back. Turn off a table or some events.</div>`; return; }
+  pages.forEach(p => p.classList.remove('ttpack'));
+  const [a, b] = pages.map(p => p.outerHTML);
+  el.innerHTML = `<div class="ttpack pocket"><div class="pk"><div class="pkpanel">${a}</div><div class="pkpanel inv">${b || ''}</div></div>` +
+    `<div class="pknote">Cut on the dashed line, fold on the dotted line</div></div>`;
+  st.innerHTML = '';
+  document.body.classList.add('pcheer');
+  appPrint('cheerPrint', 'Cheer Sheet Pocket Card');
+}
+
 
 // ── CHAMPIONSHIP DAYS ─────────────────────────────────────────────────────
 // Read from the 2026 UAA (Feb 11–14) and NCAA DIII (Mar 18–21) results files.
