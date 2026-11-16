@@ -237,8 +237,8 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cst tr.sp td{background:#fff;height:.6em;padding:0;}
 .cst td.nev{vertical-align:middle;text-align:center;background:#fff;border:1px solid #bbb;}
 .csn td{background:#fff;border:1px solid #bbb;} .csn td.nm{width:auto;}
-.cstabs{display:flex;gap:8px;align-items:flex-start;}
-.csnw{flex:1 1 auto;min-width:0;} .csright{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.cstabs{display:flex;gap:8px;align-items:stretch;}
+.csnw{flex:1 1 auto;min-width:0;} .csn td{padding:.15em .4em;} .csright{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;}
 .csp td{min-width:2.2em;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -503,8 +503,8 @@ new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh'
           <div><label>Side text (by the tables)</label><input id="csSide" type="text" placeholder="DOMINANCE" oninput="csSaveOpts()"></div>
         </div>
         <div class="frow f2">
-          <div><label>Points-by-place table</label><select id="csPts" onchange="csSaveOpts()"><option value="auto">This meet's scoring</option><option value="uaa">UAA</option><option value="ncaa">NCAA</option><option value="denison">Denison</option><option value="none">None</option></select></div>
-          <div><label>&nbsp;</label><label class="check-item"><input type="checkbox" id="csNcaa" onchange="csSaveOpts()"> Prior-year NCAA table</label></div>
+          <div><label>Points-by-place table</label><select id="csPts" onchange="csSaveOpts()"><option value="auto">Auto (UAAs and NCAAs only)</option><option value="uaa">UAA</option><option value="ncaa">NCAA</option><option value="none">None</option></select></div>
+          <div><label>&nbsp;</label><label class="check-item"><input type="checkbox" id="csNcaa" onchange="csSaveOpts()" checked> NCAA table (A/B Final, Q 16th, Q)</label></div>
         </div>
         <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
           <button class="btn bsm" onclick="document.getElementById('q16File').click()">&#8679; Q 16th from NCAA psych sheet</button>
@@ -2877,7 +2877,7 @@ function generateReport() {
 const CS_EVENT_COLS = ['afinal', 'bfinal', 'ncaarec', 'vr', 'cutA', 'cutQ', 'cutB'];
 const CS_ORDER = ['seed', 'ltbt', 'sbt', 'std', 'prior', 'drop', 'pct', 'entries', 'cutA', 'cutQ', 'cutB', 'afinal', 'bfinal', 'ncaarec', 'vr'];
 const CS_TIME_COLS = new Set(['seed', 'ltbt', 'sbt', 'prior', 'afinal', 'bfinal', 'ncaarec', 'vr', 'cutA', 'cutQ', 'cutB']);
-const CS_PTS = { DENISON: 'denison', UAA: 'uaa', NCAA: 'ncaa' };
+const CS_PTS = { UAA: 'uaa', NCAA: 'ncaa' };   // points table only where it helps: UAAs and NCAAs
 // Points by place (same tables SwimScore scores with)
 const CS_MDL = {
   uaa:  { name: 'UAA', ind: [32,28,27,26,25,24,23,22,20,17,16,15,14,13,12,11,9,7,6,5,4,3,2,1], rel: [64,56,54,52,50,48,46,44,40,34,32,30,28,26,24,22] },
@@ -2901,7 +2901,7 @@ function csRenderOpts() {
   const r = csRef();
   document.getElementById('csTitle').value = r.csTitle != null ? r.csTitle : 'Race Day: No Excuses';
   document.getElementById('csSide').value = r.csSide != null ? r.csSide : 'DOMINANCE';
-  document.getElementById('csNcaa').checked = !!r.csNcaa;
+  document.getElementById('csNcaa').checked = r.csNcaa !== false;
   document.getElementById('csPts').value = r.csPts || 'auto';
   const q = r.q16 || {}, n = Object.keys(q).length;
   document.getElementById('q16Status').textContent = n ? `Q 16th: ${n} events from ${r.q16File || 'NCAA psych sheet'}` : 'Q 16th: not loaded';
@@ -2963,8 +2963,8 @@ function csPointsTable(key) {
 
 function csTablesCol(yr, sched) {
   const ref = csRef();
-  const n = ref.csNcaa ? csNcaaTable(yr) : '';
-  const ptsKey = ref.csPts === 'none' ? null : ref.csPts && ref.csPts !== 'auto' ? ref.csPts : CS_PTS[sched];
+  const n = ref.csNcaa !== false ? csNcaaTable(yr) : '';
+  const ptsKey = ref.csPts === 'none' ? null : CS_MDL[ref.csPts] ? ref.csPts : CS_PTS[sched];
   const p = ptsKey ? csPointsTable(ptsKey) : '';
   const side = (ref.csSide != null ? ref.csSide : 'DOMINANCE').trim();
   if (!n && !p && !side) return '';
@@ -3009,7 +3009,7 @@ function buildCheerPrint() {
   el.querySelectorAll('.cspage').forEach(pg => {
     const cs = [...pg.querySelectorAll('.cscol')];
     fit(cs.filter(c => !c.querySelector('.cstabs')), 11);
-    fit(cs.filter(c => c.querySelector('.cstabs')), 10);
+    fit(cs.filter(c => c.querySelector('.cstabs')), 16);
   });
   el.style.cssText = '';
   return '';
