@@ -250,19 +250,22 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Pocket card: same look as the full sheet, laid out at its printed size */
-.cspage.pkm{width:353px;height:469px;column-gap:6px;}
+.cspage.pkm{width:404px;height:500px;column-gap:6px;}
+.cspage.pkm .cst tr.sp td{height:.3em;} .cspage.pkm .cst td{line-height:1.15;}
+.csh2{margin-top:.3em;}
 .cspage.pkm .csh,.cspage.pkm .cstitle{font-size:8px;}
 .cspage.pkm .cst td,.cspage.pkm .cst th{padding:0 .3em;border-width:.5px;}
 .cspage.pkm .csside{font-size:15px;}
 .cspage.pkm .cstabs{gap:4px;}
 .cspage.pkm .csn,.cspage.pkm .csn tr.top td{border-width:1px;}
-.pocket{width:720px;height:958px;display:flex;flex-direction:column;align-items:center;background:#fff;}
-.pk{width:355px;border:1px dashed #666;}
-.pkpanel{width:353px;height:470px;overflow:hidden;position:relative;}
+.pocket{page:pocketpg;width:768px;height:1004px;display:flex;flex-direction:column;align-items:center;background:#fff;}
+.pk{width:406px;border:1px dashed #666;}
+.pkpanel{width:404px;height:500px;overflow:hidden;position:relative;}
 .pkpanel+.pkpanel{border-top:1px dotted #666;}
 .pkpanel>.cspage{position:absolute;left:0;top:0;}
 .pkpanel.inv{transform:rotate(180deg);}
 .pknote{font:9px Arial,sans-serif;color:#666;margin-top:4px;}
+@page pocketpg { margin: .25in; }
 /* Print */
 .print-only,.code-print{display:none;}
 @media print {
@@ -3011,14 +3014,36 @@ function buildCheerPrint(pocket) {
     blocks.forEach(b => { if (size >= per && colsOut.length < n - 1) { colsOut.push({ title: '', rows: cur }); cur = []; size = 0; } cur.push(...b); size += b.length + 1; });
     colsOut.push({ title: '', rows: cur });
   }
+  colsOut = colsOut.map(c => ({ segs: [{ title: c.title, rows: c.rows }] }));
+  // pocket card: the two day columns on a side share their events evenly (a day can continue into the next column)
+  if (pocket) for (let i = 0; i + 1 < colsOut.length; i += 2) {
+    const items = [];
+    colsOut.slice(i, i + 2).forEach(c => c.segs.forEach(sg => {
+      items.push({ head: sg.title, w: 2 });
+      sg.rows.forEach(r => { if (r.first) items.push({ title: sg.title, block: [], w: 1 }); const b = items[items.length - 1]; b.block.push(r); b.w++; });
+    }));
+    const total = items.reduce((a, x) => a + x.w, 0);
+    let acc = 0, cut = items.length, best = Infinity;
+    items.forEach((x, k) => { if (k && items[k - 1].head == null) { const d = Math.abs(acc - total / 2); if (d < best) { best = d; cut = k; } } acc += x.w; });
+    const toSegs = list => {
+      const segs = [];
+      list.forEach(x => {
+        if (x.head != null) segs.push({ title: x.head, rows: [] });
+        else { if (!segs.length) segs.push({ title: x.title ? x.title + ' (cont.)' : '', rows: [] }); segs[segs.length - 1].rows.push(...x.block); }
+      });
+      return segs.filter(sg => sg.rows.length);
+    };
+    colsOut.splice(i, 2, { segs: toSegs(items.slice(0, cut)) }, { segs: toSegs(items.slice(cut)) });
+  }
   const tables = csTablesCol(yr, sched);
-  if (tables) colsOut.push({ title: '', html: tables });
+  if (tables) colsOut.push({ segs: [{ title: '' }], html: tables });
   const ref = csRef(), title = (ref.csTitle != null ? ref.csTitle : 'Race Day: No Excuses').trim();
   const pages = [];
   for (let i = 0; i < colsOut.length; i += 2) pages.push(colsOut.slice(i, i + 2));
   const el = document.getElementById('cheerPrint');
   el.innerHTML = pages.map(pg => `<div class="ttpack cspage${pocket ? ' pkm' : ''}">${title ? `<div class="cstitle">${esc(title)}</div>` : ''}` +
-    pg.map(c => `<div class="cscol"><div class="csh">${esc(c.title) || '&nbsp;'}</div>${c.html || csEventTable(c.rows, cols, yr)}</div>`).join('') + '</div>').join('');
+    pg.map(c => `<div class="cscol">${c.html ? `<div class="csh">&nbsp;</div>${c.html}` :
+      c.segs.map((sg, k) => `<div class="csh${k ? ' csh2' : ''}">${esc(sg.title) || '&nbsp;'}</div>${sg.rows.length ? csEventTable(sg.rows, cols, yr) : ''}`).join('')}</div>`).join('') + '</div>').join('');
   // fit: lay out off-screen at page size, shrink each page's type until both columns fit
   el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0';
   // the day columns on a page share one size; the tables column is sized on its own
@@ -3055,8 +3080,7 @@ function printPocketCard() {
   if (pages.length > 2) { st.innerHTML = `<div class="st sterr">This sheet runs ${pages.length} pages; the pocket card holds a front and a back. Turn off a table or some events.</div>`; return; }
   pages.forEach(p => p.classList.remove('ttpack'));
   const [a, b] = pages.map(p => p.outerHTML);
-  el.innerHTML = `<div class="ttpack pocket"><div class="pk"><div class="pkpanel">${a}</div><div class="pkpanel inv">${b || ''}</div></div>` +
-    `<div class="pknote">Cut on the dashed line, fold on the dotted line</div></div>`;
+  el.innerHTML = `<div class="ttpack pocket"><div class="pk"><div class="pkpanel">${a}</div><div class="pkpanel inv">${b || ''}</div></div></div>`;
   st.innerHTML = '';
   document.body.classList.add('pcheer');
   appPrint('cheerPrint', 'Cheer Sheet Pocket Card');
@@ -4109,7 +4133,8 @@ async function appPdf(id, name) {
     await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => window.html2canvas);
     await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf);
     // the printout, laid out with the print styles, in a hidden page the width of a letter page inside .5in margins
-    const W = 720, H = 960;
+    const pk = !!(document.getElementById(id) || document.body).querySelector('.pocket');
+    const W = pk ? 768 : 720, H = pk ? 1008 : 960, M = pk ? 0.25 : 0.5;
     const css = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n').replace(/@media\s+print\s*\{/g, '@media all {');
     const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map(l => l.outerHTML).join('');
     fr = document.createElement('iframe');
@@ -4139,7 +4164,7 @@ async function appPdf(id, name) {
         slice.width = canvas.width; slice.height = Math.ceil((y1 - y0) * scale);
         slice.getContext('2d').drawImage(canvas, 0, Math.floor(y0 * scale), canvas.width, slice.height, 0, 0, canvas.width, slice.height);
         if (!first) pdf.addPage(); first = false;
-        pdf.addImage(fine ? slice.toDataURL('image/png') : slice.toDataURL('image/jpeg', 0.92), fine ? 'PNG' : 'JPEG', 0.5, 0.5, 7.5, 7.5 * slice.height / slice.width);
+        pdf.addImage(fine ? slice.toDataURL('image/png') : slice.toDataURL('image/jpeg', 0.92), fine ? 'PNG' : 'JPEG', M, M, 8.5 - 2 * M, (8.5 - 2 * M) * slice.height / slice.width);
         y0 = y1;
       }
     }
