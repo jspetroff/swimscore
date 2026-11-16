@@ -249,6 +249,16 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .csp td{min-width:2.2em;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+/* Pocket card: plain white cells and black text print sharper at small sizes than shaded rows */
+.cspage.pkm .cst td{background:#fff!important;border:0;border-bottom:.6px solid #999;line-height:1.12;color:#000;}
+.cspage.pkm .cst th{background:#fff;color:#000;border:0;border-bottom:1.2px solid #000;}
+.cspage.pkm .cst tr.sp{display:none;}
+.cspage.pkm .cst tr.f td{border-top:1.2px solid #000;}
+.cspage.pkm .cst td.nm{font-weight:600;}
+.cspage.pkm .csn{border:1.2px solid #000;} .cspage.pkm .csn tr.top td{border-top:1.2px solid #000;}
+.cspage.pkm .csn td.nl,.cspage.pkm .csn td.nt{border-left:.6px solid #999;}
+.cspage.pkm .csh,.cspage.pkm .cstitle{color:#000;}
+.cspage.pkm .csside{color:#000;}
 .pocket{width:720px;height:958px;display:flex;flex-direction:column;align-items:center;background:#fff;}
 .pk{width:355px;border:1px dashed #666;}
 .pkpanel{width:353px;height:470px;overflow:hidden;position:relative;}
@@ -2948,7 +2958,7 @@ function csEventTable(rows, cols, yr) {
   let h = `<table class="cst"><tr><th>Event</th><th>Racer</th>${cols.map(c => `<th>${esc(L[c] || c)}</th>`).join('')}</tr>`;
   rows.forEach((r, i) => {
     if (r.first && i) h += `<tr class="sp"><td colspan="${cols.length + 2}"></td></tr>`;
-    h += `<tr><td class="ev">${r.first ? esc(r.event.replace(' Springboard', ' Dive')) : ''}</td><td class="nm">${esc(r.name)}</td>` + cols.map(c => {
+    h += `<tr${r.first ? ' class="f"' : ''}><td class="ev">${r.first ? esc(r.event.replace(' Springboard', ' Dive')) : ''}</td><td class="nm">${esc(r.name)}</td>` + cols.map(c => {
       const ev = CS_EVENT_COLS.includes(c), v = ev && !r.first ? '' : r[c];
       return `<td class="${ev ? 'ec' : 'tc'}">${esc(CS_TIME_COLS.has(c) ? csTime(v) : v)}</td>`;
     }).join('') + '</tr>';
@@ -2986,7 +2996,7 @@ function csTablesCol(yr, sched) {
   return `<div class="cstabs">${n ? `<div class="csnw">${n}</div>` : ''}<div class="csright">${p}${side ? `<div class="csside">${[...side].map(c => `<span>${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('')}</div>` : ''}</div></div>`;
 }
 
-function buildCheerPrint() {
+function buildCheerPrint(pocket) {
   const B = buildReportRows();
   if (B.err) return B.err;
   const { rows, selectedCols, yr, sched } = B;
@@ -3010,7 +3020,7 @@ function buildCheerPrint() {
   const pages = [];
   for (let i = 0; i < colsOut.length; i += 2) pages.push(colsOut.slice(i, i + 2));
   const el = document.getElementById('cheerPrint');
-  el.innerHTML = pages.map(pg => `<div class="ttpack cspage">${title ? `<div class="cstitle">${esc(title)}</div>` : ''}` +
+  el.innerHTML = pages.map(pg => `<div class="ttpack cspage${pocket ? ' pkm' : ''}">${title ? `<div class="cstitle">${esc(title)}</div>` : ''}` +
     pg.map(c => `<div class="cscol"><div class="csh">${esc(c.title) || '&nbsp;'}</div>${c.html || csEventTable(c.rows, cols, yr)}</div>`).join('') + '</div>').join('');
   // fit: lay out off-screen at page size, shrink each page's type until both columns fit
   el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0';
@@ -3041,7 +3051,7 @@ window.addEventListener('afterprint', () => document.body.classList.remove('pche
 // Pocket card: the front and back pages at half size on one sheet, the back upside down, so it can be cut
 // out and folded top to bottom into a two-sided card (about 3.75 x 5 in folded).
 function printPocketCard() {
-  const err = buildCheerPrint();
+  const err = buildCheerPrint(true);
   const st = document.getElementById('reportStatus');
   if (err) { st.innerHTML = `<div class="st sterr">${esc(err)}</div>`; return; }
   const el = document.getElementById('cheerPrint'), pages = [...el.querySelectorAll('.cspage')];
