@@ -224,11 +224,11 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 
 /* Cheer sheet printout (laid out at letter size inside .5in margins: 720 x 960 px) */
 #cheerPrint{display:none;}
-.cspage{position:relative;width:720px;height:958px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;column-gap:12px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;overflow:hidden;}
-.cscol{height:958px;overflow:hidden;min-width:0;}
+.cspage{position:relative;width:720px;height:958px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(0,1fr);column-gap:12px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;overflow:hidden;}
+.cscol{grid-row:2;min-height:0;overflow:hidden;min-width:0;}
 .csh,.cstitle{font-family:'Arial Black',Impact,Arial,sans-serif;font-style:italic;font-weight:900;color:#1f3a93;font-size:15px;line-height:1.3;text-align:center;}
 .cspage table,.cspage th,.cspage td{font-size:1em!important;font-family:inherit!important;letter-spacing:0!important;text-transform:none!important;}
-.cstitle{position:absolute;left:0;right:0;top:0;pointer-events:none;}
+.cstitle{grid-column:1 / -1;grid-row:1;margin-bottom:2px;}
 .cst{width:100%;border-collapse:collapse;}
 .cst th{background:#4472c4;color:#fff;font-weight:700;padding:1px 3px;border:1px solid #fff;text-align:center;white-space:nowrap;}
 .cst td{background:#dae3f3;border:1px solid #fff;padding:0 3px;white-space:nowrap;line-height:1.35;}
