@@ -4061,7 +4061,9 @@ function printLineup() {
 // ── PRINTING from the iPhone home-screen app ─────────────────────────────
 // Home-screen web apps on iPhone ignore window.print(), so there the printout is drawn into a PDF instead
 // and handed to the share sheet (Print, Save to Files, AirDrop…). Everywhere else Print works as before.
-const isHomeScreenApp = () => window._forcePdf || window.navigator.standalone === true || !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+// Only iPhone/iPad home-screen apps: a Chrome app window on a computer prints normally (as real text)
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isHomeScreenApp = () => window._forcePdf || window.navigator.standalone === true || (isIOS() && !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches));
 function appPrint(id, name) {
   if (!isHomeScreenApp()) { window.print(); return; }
   appPdf(id, name).finally(() => document.body.classList.remove('ptags', 'pcheer'));
