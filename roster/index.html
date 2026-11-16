@@ -250,7 +250,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Pocket card: same look as the full sheet, laid out at its printed size */
-.cspage.pkm{width:432px;height:512px;column-gap:6px;}
+.cspage.pkm{width:432px;height:760px;column-gap:6px;}
 .cst td.ck{font-weight:700;white-space:nowrap;text-align:left;} .cst td.ck span{font-weight:400;color:#1f3a93;}
 .cspage.pkm .cst tr.sp td{height:.3em;} .cspage.pkm .cst td{line-height:1.15;}
 .csh2{margin-top:.3em;}
@@ -259,12 +259,11 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cspage.pkm .csside{font-size:15px;}
 .cspage.pkm .cstabs{gap:4px;}
 .cspage.pkm .csn,.cspage.pkm .csn tr.top td{border-width:1px;}
-.pocket{width:787px;height:1026px;display:flex;flex-direction:column;align-items:center;background:#fff;}
-.pk{width:432px;}
-.pkpanel{width:432px;height:512px;overflow:hidden;position:relative;}
-.pkpanel+.pkpanel{border-top:1px dotted #666;}
+.pocket{width:1027px;height:786px;display:flex;align-items:center;justify-content:center;background:#fff;}
+.pk{display:flex;}
+.pkpanel{width:432px;height:760px;overflow:hidden;position:relative;}
+.pkpanel+.pkpanel{border-left:1px dotted #666;}
 .pkpanel>.cspage{position:absolute;left:0;top:0;}
-.pkpanel.inv{transform:rotate(180deg);}
 .pknote{font:9px Arial,sans-serif;color:#666;margin-top:4px;}
 /* Print */
 .print-only,.code-print{display:none;}
@@ -538,7 +537,7 @@ new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh'
       </div>
       <div style="display:flex;gap:.5rem;margin-top:1rem">
         <button class="btn bprimary" style="flex:1;padding:.75rem" onclick="printCheerSheet()">&#128424; Print / PDF</button>
-        <button class="btn" style="flex:1;padding:.75rem" onclick="printPocketCard()" title="Front and back at half size on one sheet, back upside down: cut out and fold">&#9986; Pocket card</button>
+        <button class="btn" style="flex:1;padding:.75rem" onclick="printPocketCard()" title="Front and back side by side on one landscape sheet: cut out and fold left to right">&#9986; Pocket card</button>
         <button class="btn" style="flex:1;padding:.75rem" onclick="generateReport()">&#8681; Download Excel</button>
       </div>
       <div id="reportStatus" style="margin-top:.5rem"></div>
@@ -3075,17 +3074,17 @@ function buildCheerPrint(pocket) {
   };
   el.querySelectorAll('.cspage').forEach(pg => {
     const cs = [...pg.querySelectorAll('.cscol')];
-    fit(cs.filter(c => !c.querySelector('.cstabs')), pocket ? 6 : 11);
-    fit(cs.filter(c => c.querySelector('.cstabs')), pocket ? 8 : 16);
+    fit(cs.filter(c => !c.querySelector('.cstabs')), pocket ? 11 : 11);
+    fit(cs.filter(c => c.querySelector('.cstabs')), pocket ? 12 : 16);
   });
   el.style.cssText = '';
   return '';
 }
 // The cheer sheet and pocket card are laid out for tighter page margins than the rest of the app's printouts
-function csPageMargin(m) {
+function csPageMargin(m, orient) {
   let st = document.getElementById('csPageCss');
   if (!st) { st = document.createElement('style'); st.id = 'csPageCss'; document.head.appendChild(st); }
-  st.textContent = m ? `@page { size: letter portrait; margin: ${m}; }` : '';
+  st.textContent = m ? `@page { size: letter ${orient || 'portrait'}; margin: ${m}; }` : '';
 }
 window.addEventListener('afterprint', () => csPageMargin(''));
 function printCheerSheet() {
@@ -3098,8 +3097,8 @@ function printCheerSheet() {
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('pcheer'));
 
-// Pocket card: the front and back pages at half size on one sheet, the back upside down, so it can be cut
-// out and folded top to bottom into a two-sided card (about 4.5 x 5.3 in folded).
+// Pocket card: the front and back side by side on a landscape sheet, both upright, so it can be cut out
+// and folded left to right into a two-sided card (about 4.5 x 7.9 in folded).
 function printPocketCard() {
   const err = buildCheerPrint(true);
   const st = document.getElementById('reportStatus');
@@ -3108,10 +3107,11 @@ function printPocketCard() {
   if (pages.length > 2) { st.innerHTML = `<div class="st sterr">This sheet runs ${pages.length} pages; the pocket card holds a front and a back. Turn off a table or some events.</div>`; return; }
   pages.forEach(p => p.classList.remove('ttpack'));
   const [a, b] = pages.map(p => p.outerHTML);
-  el.innerHTML = `<div class="ttpack pocket"><div class="pk"><div class="pkpanel">${a}</div><div class="pkpanel inv">${b || ''}</div></div></div>`;
+  // front and back side by side, both upright: fold down the dotted line (left to right), nothing printed upside down
+  el.innerHTML = `<div class="ttpack pocket"><div class="pk"><div class="pkpanel">${a}</div><div class="pkpanel">${b || ''}</div></div></div>`;
   st.innerHTML = '';
   document.body.classList.add('pcheer');
-  csPageMargin('.15in');
+  csPageMargin('.15in', 'landscape');
   appPrint('cheerPrint', 'Cheer Sheet Pocket Card');
 }
 
@@ -4164,7 +4164,7 @@ async function appPdf(id, name) {
     // the printout, laid out with the print styles, in a hidden page the width of a letter page inside .5in margins
     const pk = !!(document.getElementById(id) || document.body).querySelector('.pocket, .cspage');
     const card = !!(document.getElementById(id) || document.body).querySelector('.pocket');
-    const W = card ? 787 : pk ? 768 : 720, H = card ? 1027 : pk ? 1008 : 960, M = card ? 0.15 : pk ? 0.25 : 0.5;
+    const W = card ? 1027 : pk ? 768 : 720, H = card ? 787 : pk ? 1008 : 960, M = card ? 0.15 : pk ? 0.25 : 0.5;
     const css = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n').replace(/@media\s+print\s*\{/g, '@media all {');
     const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map(l => l.outerHTML).join('');
     fr = document.createElement('iframe');
@@ -4177,7 +4177,7 @@ async function appPdf(id, name) {
     const root = d.getElementById(id);
     const packs = [...root.querySelectorAll('.ttpack')];
     const blocks = (packs.length ? packs : [root]).flatMap(b => pdfPages(d, b, W, H));
-    const pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: 'portrait' });
+    const pdf = new window.jspdf.jsPDF({ unit: 'in', format: 'letter', orientation: card ? 'landscape' : 'portrait' });
     let first = true;
     for (const b of blocks) {
       const top = b.getBoundingClientRect().top, h = Math.ceil(b.scrollHeight || b.getBoundingClientRect().height);
@@ -4194,7 +4194,7 @@ async function appPdf(id, name) {
         slice.width = canvas.width; slice.height = Math.ceil((y1 - y0) * scale);
         slice.getContext('2d').drawImage(canvas, 0, Math.floor(y0 * scale), canvas.width, slice.height, 0, 0, canvas.width, slice.height);
         if (!first) pdf.addPage(); first = false;
-        pdf.addImage(fine ? slice.toDataURL('image/png') : slice.toDataURL('image/jpeg', 0.92), fine ? 'PNG' : 'JPEG', M, M, 8.5 - 2 * M, (8.5 - 2 * M) * slice.height / slice.width);
+        pdf.addImage(fine ? slice.toDataURL('image/png') : slice.toDataURL('image/jpeg', 0.92), fine ? 'PNG' : 'JPEG', M, M, (card ? 11 : 8.5) - 2 * M, ((card ? 11 : 8.5) - 2 * M) * slice.height / slice.width);
         y0 = y1;
       }
     }
