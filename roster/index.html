@@ -2564,6 +2564,19 @@ async function loadFinalsCuts(file) {
 }
 
 // ── MEET ENTRIES (Meet Manager psych sheet PDF) ──
+// Psych sheets printed in newspaper columns (e.g. Denison: three per page, "#3 Women 500 Yard Freestyle")
+// are read one column at a time, left to right on each page. Columns start where event headers start;
+// a sheet whose headers all start at one x is read as before.
+function psychColumnLines(pages) {
+  const xs = [];
+  pages.flat().filter(it => /^(?:Event\s+|#)\d+\b/.test((it.str || '').trim())).map(it => it.x).sort((a, b) => a - b)
+    .forEach(x => { if (!xs.length || x - xs[xs.length - 1].last > 40) xs.push({ start: x, last: x }); else xs[xs.length - 1].last = x; });
+  if (xs.length < 2) return tmItemsToLines(pages);
+  const starts = xs.map(c => c.start - 10);
+  return pages.flatMap(items => starts.map((st, c) =>
+    tmItemsToLines([items.filter(it => it.x >= st && (c === starts.length - 1 || it.x < starts[c + 1]))])).flat());
+}
+
 // "Event 3 Women 500 Yard Freestyle" headers (relays skipped), rows "1 Liu, Meredith SR Emory University 4:55.04 ..."
 const PSYCH_STROKE = { freestyle:'FS', backstroke:'BK', breaststroke:'BR', butterfly:'FL', im:'IM', 'individual medley':'IM' };
 function parsePsychSheet(lines) {
@@ -2571,7 +2584,7 @@ function parsePsychSheet(lines) {
   let cur = null;
   lines.forEach((line, i) => {
     if (!out.meet && /Psych Sheet/i.test(line) && i >= 2) out.meet = lines[i - 2].trim();
-    const h = line.match(/^Event\s+\d+\s+(?:\.\.\.\s*\()?\s*(Women|Men|Girls|Boys)\s+(.+?)\)?\s*$/i);
+    const h = line.match(/^(?:Event\s+|#)\d+\s+(?:\.\.\.\s*\()?\s*(Women|Men|Girls|Boys)\s+(.+?)\)?\s*$/i);
     if (h) {
       const g = /^(Women|Girls)/i.test(h[1]) ? 'W' : 'M', rest = h[2];
       let ev = null;
@@ -2586,7 +2599,7 @@ function parsePsychSheet(lines) {
       return;
     }
     if (!cur) return;
-    const r = line.match(/^\d+\*?\s+([^,]+),\s*([A-Za-z'.\- ]+?)\s+(?:(FR|SO|JR|SR|GS|GR|5Y|6Y)\s+)?\S.*?\s((?:\d+:)?\d+\.\d\d|NT|NS)(?:\s|$)/);
+    const r = line.match(/^\d+\*?\s+([^,]+),\s*([A-Za-z'.\- ]+?)\s+(?:(FR|SO|JR|SR|GS|GR|G|5Y|6Y)\s+)?\S.*?\s((?:\d+:)?\d+\.\d\d|NT|NS|NP)(?:\s|$)/);
     if (r) out.entries[cur].push({ name: `${r[2].trim()} ${r[1].trim()}`, year: r[3] || '', seed: /^N/.test(r[4]) ? '' : r[4] });
   });
   return out;
@@ -2611,7 +2624,9 @@ async function loadEntries(file) {
   const st = document.getElementById('entriesStatus');
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const res = parsePsychSheet(tmItemsToLines(await readPdfPages(bytes)));
+    const pages = await readPdfPages(bytes);
+    const res = parsePsychSheet(psychColumnLines(pages));
+    res.meet = parsePsychSheet(tmItemsToLines(pages)).meet || res.meet;   // the title spans the columns
     const n = Object.values(res.entries).reduce((a, l) => a + l.length, 0);
     if (!n) throw new Error('No individual entries found — is this a Meet Manager psych sheet?');
     R.reportEntries = { meet: res.meet, file: file.name, loaded: new Date().toISOString().slice(0, 10), entries: res.entries };
