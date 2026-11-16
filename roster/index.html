@@ -224,7 +224,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 
 /* Cheer sheet printout (laid out at letter size inside .5in margins: 720 x 960 px) */
 #cheerPrint{display:none;}
-.cspage{page:pocketpg;position:relative;width:768px;height:1004px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(0,1fr);column-gap:12px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;overflow:hidden;}
+.cspage{position:relative;width:768px;height:1004px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto minmax(0,1fr);column-gap:12px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;overflow:hidden;}
 .cscol{grid-row:2;min-height:0;overflow:hidden;min-width:0;}
 .csh,.cstitle{font-family:'Arial Black',Impact,Arial,sans-serif;font-style:italic;font-weight:900;color:#1f3a93;font-size:15px;line-height:1.3;text-align:center;}
 .cspage table,.cspage th,.cspage td{font-size:1em!important;font-family:inherit!important;letter-spacing:0!important;text-transform:none!important;}
@@ -250,7 +250,8 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Pocket card: same look as the full sheet, laid out at its printed size */
-.cspage.pkm{page:auto;width:528px;height:512px;column-gap:8px;}
+.cspage.pkm{width:432px;height:512px;column-gap:6px;}
+.cst td.ck{font-weight:700;white-space:nowrap;text-align:left;} .cst td.ck span{font-weight:400;color:#1f3a93;}
 .cspage.pkm .cst tr.sp td{height:.3em;} .cspage.pkm .cst td{line-height:1.15;}
 .csh2{margin-top:.3em;}
 .cspage.pkm .csh,.cspage.pkm .cstitle{font-size:8px;}
@@ -258,15 +259,13 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cspage.pkm .csside{font-size:15px;}
 .cspage.pkm .cstabs{gap:4px;}
 .cspage.pkm .csn,.cspage.pkm .csn tr.top td{border-width:1px;}
-.pocket{page:pocketcard;width:787px;height:1026px;display:flex;flex-direction:column;align-items:center;background:#fff;}
-.pk{width:528px;}
-.pkpanel{width:528px;height:512px;overflow:hidden;position:relative;}
+.pocket{width:787px;height:1026px;display:flex;flex-direction:column;align-items:center;background:#fff;}
+.pk{width:432px;}
+.pkpanel{width:432px;height:512px;overflow:hidden;position:relative;}
 .pkpanel+.pkpanel{border-top:1px dotted #666;}
 .pkpanel>.cspage{position:absolute;left:0;top:0;}
 .pkpanel.inv{transform:rotate(180deg);}
 .pknote{font:9px Arial,sans-serif;color:#666;margin-top:4px;}
-@page pocketpg { margin: .25in; }
-@page pocketcard { margin: .15in; }
 /* Print */
 .print-only,.code-print{display:none;}
 @media print {
@@ -2954,6 +2953,26 @@ function csLabels(yr) {
     ncaarec: 'NCAA Rec', vr: 'EU VR' };
 }
 
+const CS_SHORT = { cutA: 'A', cutQ: 'Q', cutB: 'B', vr: 'VR', afinal: 'AF', bfinal: 'BF', ncaarec: 'Rec' };
+// Pocket card: the event's cut and record times stacked down one column (one per row), so rows stay narrow
+function csEventTableStacked(rows, cols, yr) {
+  const L = csLabels(yr), sw = cols.filter(c => !CS_EVENT_COLS.includes(c)), evc = cols.filter(c => CS_EVENT_COLS.includes(c));
+  const n = sw.length + 2 + (evc.length ? 1 : 0);
+  let h = `<table class="cst"><tr><th>Event</th><th>Racer</th>${sw.map(c => `<th>${esc(L[c] || c)}</th>`).join('')}${evc.length ? '<th>Cuts</th>' : ''}</tr>`;
+  const blocks = []; rows.forEach(r => { if (r.first) blocks.push([]); blocks[blocks.length - 1].push(r); });
+  blocks.forEach((b, k) => {
+    if (k) h += `<tr class="sp"><td colspan="${n}"></td></tr>`;
+    const cuts = evc.map(c => [CS_SHORT[c] || c, b[0][c]]).filter(([, v]) => v);
+    const lines = Math.max(b.length, cuts.length);
+    for (let i = 0; i < lines; i++) {
+      const r = b[i];
+      h += `<tr${i ? '' : ' class="f"'}><td class="ev">${i ? '' : esc(b[0].event.replace(' Springboard', ' Dive'))}</td><td class="nm">${r ? esc(r.name) : ''}</td>` +
+        sw.map(c => `<td class="tc">${r ? esc(CS_TIME_COLS.has(c) ? csTime(r[c]) : r[c]) : ''}</td>`).join('') +
+        (evc.length ? `<td class="ck">${cuts[i] ? `<span>${esc(cuts[i][0])}</span> ${esc(csTime(cuts[i][1]))}` : ''}</td>` : '') + '</tr>';
+    }
+  });
+  return h + '</table>';
+}
 function csEventTable(rows, cols, yr) {
   const L = csLabels(yr);
   let h = `<table class="cst"><tr><th>Event</th><th>Racer</th>${cols.map(c => `<th>${esc(L[c] || c)}</th>`).join('')}</tr>`;
@@ -3044,7 +3063,7 @@ function buildCheerPrint(pocket) {
   const el = document.getElementById('cheerPrint');
   el.innerHTML = pages.map(pg => `<div class="ttpack cspage${pocket ? ' pkm' : ''}">${title ? `<div class="cstitle">${esc(title)}</div>` : ''}` +
     pg.map(c => `<div class="cscol">${c.html ? `<div class="csh">&nbsp;</div>${c.html}` :
-      c.segs.map((sg, k) => `<div class="csh${k ? ' csh2' : ''}">${esc(sg.title) || '&nbsp;'}</div>${sg.rows.length ? csEventTable(sg.rows, cols, yr) : ''}`).join('')}</div>`).join('') + '</div>').join('');
+      c.segs.map((sg, k) => `<div class="csh${k ? ' csh2' : ''}">${esc(sg.title) || '&nbsp;'}</div>${sg.rows.length ? (pocket ? csEventTableStacked : csEventTable)(sg.rows, cols, yr) : ''}`).join('')}</div>`).join('') + '</div>').join('');
   // fit: lay out off-screen at page size, shrink each page's type until both columns fit
   el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0';
   // the day columns on a page share one size; the tables column is sized on its own
@@ -3062,17 +3081,25 @@ function buildCheerPrint(pocket) {
   el.style.cssText = '';
   return '';
 }
+// The cheer sheet and pocket card are laid out for tighter page margins than the rest of the app's printouts
+function csPageMargin(m) {
+  let st = document.getElementById('csPageCss');
+  if (!st) { st = document.createElement('style'); st.id = 'csPageCss'; document.head.appendChild(st); }
+  st.textContent = m ? `@page { size: letter portrait; margin: ${m}; }` : '';
+}
+window.addEventListener('afterprint', () => csPageMargin(''));
 function printCheerSheet() {
   const err = buildCheerPrint();
   if (err) { document.getElementById('reportStatus').innerHTML = `<div class="st sterr">${esc(err)}</div>`; return; }
   document.getElementById('reportStatus').innerHTML = '';
   document.body.classList.add('pcheer');
+  csPageMargin('.25in');
   appPrint('cheerPrint', 'Cheer Sheet');
 }
 window.addEventListener('afterprint', () => document.body.classList.remove('pcheer'));
 
 // Pocket card: the front and back pages at half size on one sheet, the back upside down, so it can be cut
-// out and folded top to bottom into a two-sided card (about 5.5 x 5.2 in folded).
+// out and folded top to bottom into a two-sided card (about 4.5 x 5.3 in folded).
 function printPocketCard() {
   const err = buildCheerPrint(true);
   const st = document.getElementById('reportStatus');
@@ -3084,6 +3111,7 @@ function printPocketCard() {
   el.innerHTML = `<div class="ttpack pocket"><div class="pk"><div class="pkpanel">${a}</div><div class="pkpanel inv">${b || ''}</div></div></div>`;
   st.innerHTML = '';
   document.body.classList.add('pcheer');
+  csPageMargin('.15in');
   appPrint('cheerPrint', 'Cheer Sheet Pocket Card');
 }
 
@@ -4091,7 +4119,7 @@ const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.p
 const isHomeScreenApp = () => window._forcePdf || window.navigator.standalone === true || (isIOS() && !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches));
 function appPrint(id, name) {
   if (!isHomeScreenApp()) { window.print(); return; }
-  appPdf(id, name).finally(() => document.body.classList.remove('ptags', 'pcheer'));
+  appPdf(id, name).finally(() => { document.body.classList.remove('ptags', 'pcheer'); if (window.csPageMargin) csPageMargin(''); });
 }
 function loadScriptOnce(src, test) {
   if (test()) return Promise.resolve();
