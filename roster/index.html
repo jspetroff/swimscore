@@ -258,13 +258,17 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cspage.pkm .cst td.nm{font-weight:600;}
 .cspage.pkm .csn{border:1.2px solid #000;} .cspage.pkm .csn tr.top td{border-top:1.2px solid #000;}
 .cspage.pkm .csn td.nl,.cspage.pkm .csn td.nt{border-left:.6px solid #999;}
-.cspage.pkm .csh,.cspage.pkm .cstitle{color:#000;}
+.cspage.pkm{width:353px;height:469px;column-gap:6px;}
+.cspage.pkm .csh,.cspage.pkm .cstitle{color:#000;font-size:8px;}
+.cspage.pkm .cst td{border-bottom-width:.4px;} .cspage.pkm .cst tr.f td{border-top-width:.8px;} .cspage.pkm .cst th{border-bottom-width:.8px;}
+.cspage.pkm .csside{font-size:15px;}
+.cspage.pkm .cstabs{gap:4px;}
 .cspage.pkm .csside{color:#000;}
 .pocket{width:720px;height:958px;display:flex;flex-direction:column;align-items:center;background:#fff;}
 .pk{width:355px;border:1px dashed #666;}
 .pkpanel{width:353px;height:470px;overflow:hidden;position:relative;}
 .pkpanel+.pkpanel{border-top:1px dotted #666;}
-.pkpanel>.cspage{position:absolute;left:0;top:0;transform:scale(.49);transform-origin:0 0;}
+.pkpanel>.cspage{position:absolute;left:0;top:0;}
 .pkpanel.inv{transform:rotate(180deg);}
 .pknote{font:9px Arial,sans-serif;color:#666;margin-top:4px;}
 /* Print */
@@ -3027,15 +3031,15 @@ function buildCheerPrint(pocket) {
   el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0';
   // the day columns on a page share one size; the tables column is sized on its own
   const fit = (els, max) => {
-    let fs = max;
+    let fs = max; const min = pocket ? 2.5 : 5.5;
     const fits = () => els.every(c => c.scrollHeight <= c.clientHeight + 1 && c.scrollWidth <= c.clientWidth + 1);
     els.forEach(c => c.style.fontSize = fs + 'px');
-    while (!fits() && fs > 5.5) { fs -= 0.25; els.forEach(c => c.style.fontSize = fs + 'px'); }
+    while (!fits() && fs > min) { fs -= pocket ? 0.1 : 0.25; els.forEach(c => c.style.fontSize = fs + 'px'); }
   };
   el.querySelectorAll('.cspage').forEach(pg => {
     const cs = [...pg.querySelectorAll('.cscol')];
-    fit(cs.filter(c => !c.querySelector('.cstabs')), 11);
-    fit(cs.filter(c => c.querySelector('.cstabs')), 16);
+    fit(cs.filter(c => !c.querySelector('.cstabs')), pocket ? 6 : 11);
+    fit(cs.filter(c => c.querySelector('.cstabs')), pocket ? 8 : 16);
   });
   el.style.cssText = '';
   return '';
