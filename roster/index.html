@@ -250,7 +250,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Pocket card: same look as the full sheet, laid out at its printed size */
-.cspage.pkm{width:528px;height:500px;column-gap:8px;}
+.cspage.pkm{page:auto;width:528px;height:512px;column-gap:8px;}
 .cspage.pkm .cst tr.sp td{height:.3em;} .cspage.pkm .cst td{line-height:1.15;}
 .csh2{margin-top:.3em;}
 .cspage.pkm .csh,.cspage.pkm .cstitle{font-size:8px;}
@@ -258,14 +258,15 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cspage.pkm .csside{font-size:15px;}
 .cspage.pkm .cstabs{gap:4px;}
 .cspage.pkm .csn,.cspage.pkm .csn tr.top td{border-width:1px;}
-.pocket{page:pocketpg;width:768px;height:1004px;display:flex;flex-direction:column;align-items:center;background:#fff;}
-.pk{width:530px;border:1px dashed #666;}
-.pkpanel{width:528px;height:500px;overflow:hidden;position:relative;}
+.pocket{page:pocketcard;width:787px;height:1026px;display:flex;flex-direction:column;align-items:center;background:#fff;}
+.pk{width:528px;}
+.pkpanel{width:528px;height:512px;overflow:hidden;position:relative;}
 .pkpanel+.pkpanel{border-top:1px dotted #666;}
 .pkpanel>.cspage{position:absolute;left:0;top:0;}
 .pkpanel.inv{transform:rotate(180deg);}
 .pknote{font:9px Arial,sans-serif;color:#666;margin-top:4px;}
 @page pocketpg { margin: .25in; }
+@page pocketcard { margin: .15in; }
 /* Print */
 .print-only,.code-print{display:none;}
 @media print {
@@ -4134,7 +4135,8 @@ async function appPdf(id, name) {
     await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => window.jspdf);
     // the printout, laid out with the print styles, in a hidden page the width of a letter page inside .5in margins
     const pk = !!(document.getElementById(id) || document.body).querySelector('.pocket, .cspage');
-    const W = pk ? 768 : 720, H = pk ? 1008 : 960, M = pk ? 0.25 : 0.5;
+    const card = !!(document.getElementById(id) || document.body).querySelector('.pocket');
+    const W = card ? 787 : pk ? 768 : 720, H = card ? 1027 : pk ? 1008 : 960, M = card ? 0.15 : pk ? 0.25 : 0.5;
     const css = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n').replace(/@media\s+print\s*\{/g, '@media all {');
     const links = [...document.querySelectorAll('link[rel="stylesheet"]')].map(l => l.outerHTML).join('');
     fr = document.createElement('iframe');
