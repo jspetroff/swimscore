@@ -226,7 +226,8 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 #cheerPrint{display:none;}
 .cspage{position:relative;width:720px;height:958px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;column-gap:12px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;overflow:hidden;}
 .cscol{height:958px;overflow:hidden;min-width:0;}
-.csh,.cstitle{font-family:'Arial Black',Impact,Arial,sans-serif;font-style:italic;font-weight:900;color:#1f3a93;font-size:1.9em;line-height:1.15;text-align:center;}
+.csh,.cstitle{font-family:'Arial Black',Impact,Arial,sans-serif;font-style:italic;font-weight:900;color:#1f3a93;font-size:15px;line-height:1.3;text-align:center;}
+.cspage table,.cspage th,.cspage td{font-size:1em!important;font-family:inherit!important;letter-spacing:0!important;text-transform:none!important;}
 .cstitle{position:absolute;left:0;right:0;top:0;pointer-events:none;}
 .cst{width:100%;border-collapse:collapse;}
 .cst th{background:#4472c4;color:#fff;font-weight:700;padding:1px 3px;border:1px solid #fff;text-align:center;white-space:nowrap;}
@@ -239,7 +240,7 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .cstabs{display:flex;gap:8px;align-items:flex-start;}
 .csnw{flex:1 1 auto;min-width:0;} .csright{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;}
 .csp td{min-width:2.2em;}
-.csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:3.6em;line-height:1.05;color:#e8b04a;}
+.csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:30px;line-height:1.05;color:#e8b04a;}
 #cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Print */
 .print-only,.code-print{display:none;}
@@ -2884,7 +2885,7 @@ const CS_MDL = {
   denison: { name: 'Denison', ind: [35,31,30,29,28,27,26,25,24,22,19,18,17,16,15,14,13,12,10,8,7,6,5,4,3,2,1],
              rel: [70,62,60,58,56,54,52,50,48,44,38,36,34,32,30,28,26,24,20,16,14,12,10,8,6,4,2] }
 };
-const csTime = v => /^\d{1,2}\.\d\d$/.test(v || '') ? ':' + v : (v || '');
+const csTime = v => String(v || '').replace(/^(\d{1,2}\.\d\d)(?=$|\s)/, ':$1');
 const csYY = y => (y || '').toString().slice(-2);
 
 function csRef() { return R.reportRef || (R.reportRef = {}); }
@@ -2932,7 +2933,7 @@ function csEventTable(rows, cols, yr) {
   let h = `<table class="cst"><tr><th>Event</th><th>Racer</th>${cols.map(c => `<th>${esc(L[c] || c)}</th>`).join('')}</tr>`;
   rows.forEach((r, i) => {
     if (r.first && i) h += `<tr class="sp"><td colspan="${cols.length + 2}"></td></tr>`;
-    h += `<tr><td class="ev">${r.first ? esc(r.event) : ''}</td><td class="nm">${esc(r.name)}</td>` + cols.map(c => {
+    h += `<tr><td class="ev">${r.first ? esc(r.event.replace(' Springboard', ' Dive')) : ''}</td><td class="nm">${esc(r.name)}</td>` + cols.map(c => {
       const ev = CS_EVENT_COLS.includes(c), v = ev && !r.first ? '' : r[c];
       return `<td class="${ev ? 'ec' : 'tc'}">${esc(CS_TIME_COLS.has(c) ? csTime(v) : v)}</td>`;
     }).join('') + '</tr>';
@@ -2998,11 +2999,17 @@ function buildCheerPrint() {
     pg.map(c => `<div class="cscol"><div class="csh">${esc(c.title) || '&nbsp;'}</div>${c.html || csEventTable(c.rows, cols, yr)}</div>`).join('') + '</div>').join('');
   // fit: lay out off-screen at page size, shrink each page's type until both columns fit
   el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0';
+  // the day columns on a page share one size; the tables column is sized on its own
+  const fit = (els, max) => {
+    let fs = max;
+    const fits = () => els.every(c => c.scrollHeight <= c.clientHeight + 1 && c.scrollWidth <= c.clientWidth + 1);
+    els.forEach(c => c.style.fontSize = fs + 'px');
+    while (!fits() && fs > 5.5) { fs -= 0.25; els.forEach(c => c.style.fontSize = fs + 'px'); }
+  };
   el.querySelectorAll('.cspage').forEach(pg => {
-    let fs = 11;
-    const fits = () => [...pg.querySelectorAll('.cscol')].every(c => c.scrollHeight <= c.clientHeight + 1 && c.scrollWidth <= c.clientWidth + 1);
-    pg.style.fontSize = fs + 'px';
-    while (!fits() && fs > 5.5) { fs -= 0.25; pg.style.fontSize = fs + 'px'; }
+    const cs = [...pg.querySelectorAll('.cscol')];
+    fit(cs.filter(c => !c.querySelector('.cstabs')), 11);
+    fit(cs.filter(c => c.querySelector('.cstabs')), 10);
   });
   el.style.cssText = '';
   return '';
