@@ -221,6 +221,26 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
 .rtag .ll b,.rtag .yr{font-family:var(--tag-font);font-size:10pt;font-weight:400;}
 .rtag .yr{font-size:14pt;line-height:1;}
 #tagPrint{display:none;}
+
+/* Cheer sheet printout (laid out at letter size inside .5in margins: 720 x 960 px) */
+#cheerPrint{display:none;}
+.cspage{position:relative;width:720px;height:958px;box-sizing:border-box;display:grid;grid-template-columns:1fr 1fr;column-gap:12px;background:#fff;color:#000;font-family:Calibri,Carlito,Arial,sans-serif;overflow:hidden;}
+.cscol{height:958px;overflow:hidden;min-width:0;}
+.csh,.cstitle{font-family:'Arial Black',Impact,Arial,sans-serif;font-style:italic;font-weight:900;color:#1f3a93;font-size:1.9em;line-height:1.15;text-align:center;}
+.cstitle{position:absolute;left:0;right:0;top:0;pointer-events:none;}
+.cst{width:100%;border-collapse:collapse;}
+.cst th{background:#4472c4;color:#fff;font-weight:700;padding:1px 3px;border:1px solid #fff;text-align:center;white-space:nowrap;}
+.cst td{background:#dae3f3;border:1px solid #fff;padding:0 3px;white-space:nowrap;line-height:1.35;}
+.cst td.ev{font-weight:700;} .cst td.ec{font-weight:700;text-align:center;} .cst td.tc{text-align:center;}
+.cst td.nm{width:99%;}
+.cst tr.sp td{background:#fff;height:.6em;padding:0;}
+.cst td.nev{vertical-align:middle;text-align:center;background:#fff;border:1px solid #bbb;}
+.csn td{background:#fff;border:1px solid #bbb;} .csn td.nm{width:auto;}
+.cstabs{display:flex;gap:8px;align-items:flex-start;}
+.csnw{flex:1 1 auto;min-width:0;} .csright{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.csp td{min-width:2.2em;}
+.csside{display:flex;flex-direction:column;align-items:center;font-family:Georgia,'Times New Roman',serif;font-weight:700;font-size:3.6em;line-height:1.05;color:#e8b04a;}
+#cheerPrint *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
 /* Print */
 .print-only,.code-print{display:none;}
 @media print {
@@ -232,7 +252,8 @@ hr{border:none;border-top:1px solid var(--border);margin:1.25rem 0;}
   .hdr,.tabs,.fbar,.no-print,.sec-hdr,#ttHelp,#loginScreen,.modal,.modsw,#d3Status{display:none!important;}
   .topfix{position:static!important;}
   .print-only{display:block!important;}
-  body.ptags #appRoot{display:none!important;}
+  body.ptags #appRoot,body.pcheer #appRoot{display:none!important;}
+  body.pcheer #cheerPrint{display:block!important;}
   body.ptags #tagPrint{display:flex!important;flex-direction:column;align-items:flex-start;}
   body.ptags #tagPrint .rtag{box-shadow:none;outline:.5px dashed #999;margin-bottom:0;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .code-print{display:inline!important;font-family:var(--fm);font-weight:700;}
@@ -473,7 +494,27 @@ new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh'
         </div>
         <div id="refStatus" style="font-size:.72rem;font-family:var(--fm);color:var(--text-dim);margin-top:.5rem"></div>
       </div>
-      <button class="btn bprimary" style="width:100%;margin-top:1rem;padding:.75rem" onclick="generateReport()">&#8681; Generate &amp; Download Excel</button>
+      <div class="card" style="margin-top:1rem">
+        <div class="ct">Cheer Sheet Printout</div>
+        <p style="font-size:.78rem;color:var(--text-dim);margin-bottom:.75rem">Front and back: one day per column in meet order, tables in the last column. Uses the columns, events and entries picked above.</p>
+        <div class="frow f2">
+          <div><label>Title</label><input id="csTitle" type="text" placeholder="Race Day: No Excuses" oninput="csSaveOpts()"></div>
+          <div><label>Side text (by the tables)</label><input id="csSide" type="text" placeholder="DOMINANCE" oninput="csSaveOpts()"></div>
+        </div>
+        <div class="frow f2">
+          <div><label>Points-by-place table</label><select id="csPts" onchange="csSaveOpts()"><option value="auto">This meet's scoring</option><option value="uaa">UAA</option><option value="ncaa">NCAA</option><option value="denison">Denison</option><option value="none">None</option></select></div>
+          <div><label>&nbsp;</label><label class="check-item"><input type="checkbox" id="csNcaa" onchange="csSaveOpts()"> Prior-year NCAA table</label></div>
+        </div>
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          <button class="btn bsm" onclick="document.getElementById('q16File').click()">&#8679; Q 16th from NCAA psych sheet</button>
+          <input type="file" id="q16File" accept=".pdf" style="display:none" onchange="loadQ16(this.files[0]).finally(()=>{this.value=''})">
+          <span id="q16Status" style="font-size:.72rem;font-family:var(--fm);color:var(--text-dim)"></span>
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem;margin-top:1rem">
+        <button class="btn bprimary" style="flex:1;padding:.75rem" onclick="printCheerSheet()">&#128424; Print / PDF</button>
+        <button class="btn" style="flex:1;padding:.75rem" onclick="generateReport()">&#8681; Download Excel</button>
+      </div>
       <div id="reportStatus" style="margin-top:.5rem"></div>
     </div>
   </div>
@@ -753,6 +794,7 @@ new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh'
 
 </div><!-- /appRoot -->
 <div id="tagPrint"></div>
+<div id="cheerPrint"></div>
 
 <script>
 // ── CONSTANTS ─────────────────────────────────────────────────────────────
@@ -2499,6 +2541,7 @@ function renderReportEvents() {
   const keep = sel.value;
   sel.innerHTML = seasons.map(s => `<option ${s === (keep || cur) ? 'selected' : ''}>${s}</option>`).join('');
   renderEntriesStatus();
+  csRenderOpts();
   if (!(R.reportEntries && Object.keys(R.reportEntries.entries || {}).length) && document.getElementById('repLimit').value === 'entries')
     document.getElementById('repLimit').value = '0';
   // saved reference data
@@ -2673,7 +2716,7 @@ function matchEntry(i, sid) {
 // Save reference data as it's typed (debounced) and show what was understood
 let _refTimer = null;
 function saveReportRef() {
-  R.reportRef = {
+  R.reportRef = { ...(R.reportRef || {}),
     aFinal: document.getElementById('aFinalCuts').value,
     bFinal: document.getElementById('bFinalCuts').value,
     finalsYear: document.getElementById('finalsYear').value.trim(),
@@ -2723,7 +2766,8 @@ function reportTimes(s, ev, season) {
   return { sbt: sb ? sb.time : '', sbSwim: sb, ltbt: lt, prior, n: swims.length };
 }
 
-function generateReport() {
+// Rows for the cheer sheet / progress report from the Reports tab settings ({ err } when there's nothing to show)
+function buildReportRows() {
   ensureState();
   const gender = document.getElementById('repGender').value;
   const year = document.getElementById('repYear').value;
@@ -2732,7 +2776,7 @@ function generateReport() {
   const limit = useEntries ? 0 : (parseInt(document.getElementById('repLimit').value, 10) || 0);
   const ent = R.reportEntries;
   if (useEntries && !(ent && Object.keys(ent.entries || {}).length)) {
-    document.getElementById('reportStatus').innerHTML = '<div class="st sterr">Upload the meet\'s psych sheet first, or pick another "Swimmers per event" option.</div>'; return;
+    return { err: 'Upload the meet\'s psych sheet first, or pick another "Swimmers per event" option.' };
   }
   const selectedEvents = [...document.querySelectorAll('#repEventPicker input:checked')].map(i=>i.value);
   const selectedCols = [...document.querySelectorAll('#colPicker input:checked')].map(i=>i.id.replace('col_',''));
@@ -2788,8 +2832,14 @@ function generateReport() {
     });
   });
 
-  if (!rows.length) { document.getElementById('reportStatus').innerHTML='<div class="st sterr">No swimmers have times in the selected events this season.</div>'; return; }
+  if (!rows.length) return { err: 'No swimmers have times in the selected events this season.' };
+  return { rows, gender, selectedCols, yr, sched, season };
+}
 
+function generateReport() {
+  const B = buildReportRows();
+  if (B.err) { document.getElementById('reportStatus').innerHTML = `<div class="st sterr">${esc(B.err)}</div>`; return; }
+  const { rows, gender, selectedCols, yr } = B;
   const colMap = { ltbt:'LTBT', sbt:'SBT', afinal:(yr ? yr + ' ' : '') + 'A Final', bfinal:(yr ? yr + ' ' : '') + 'B Final',
     ncaarec:'NCAA Rec', vr:'EU VR', cutA:'NCAA A', cutB:'NCAA B', cutQ:'2026 Invite', std:'Std',
     seed:'Seed', prior:'Best before season', drop:'Drop (s)', pct:'% Drop', entries:'# Swims' };
@@ -2817,6 +2867,154 @@ function generateReport() {
   document.getElementById('reportStatus').innerHTML=`<div class="st stok">✓ Downloaded — ${rows.length} rows across ${nEv} events. Open in Excel.</div>`;
   window._lastReportCsv = csvRows.join('\n');
 }
+
+
+// ── CHEER SHEET PRINTOUT ──────────────────────────────────────────────────
+// Two-column pages (front and back): one day per column, in meet order; the last column can hold the
+// prior-year NCAA table and the points-by-place table. Event-level numbers (cuts, records) show on the
+// event's first row only. Each page's type shrinks until its columns fit a letter page.
+const CS_EVENT_COLS = ['afinal', 'bfinal', 'ncaarec', 'vr', 'cutA', 'cutQ', 'cutB'];
+const CS_ORDER = ['seed', 'ltbt', 'sbt', 'std', 'prior', 'drop', 'pct', 'entries', 'cutA', 'cutQ', 'cutB', 'afinal', 'bfinal', 'ncaarec', 'vr'];
+const CS_TIME_COLS = new Set(['seed', 'ltbt', 'sbt', 'prior', 'afinal', 'bfinal', 'ncaarec', 'vr', 'cutA', 'cutQ', 'cutB']);
+const CS_PTS = { DENISON: 'denison', UAA: 'uaa', NCAA: 'ncaa' };
+// Points by place (same tables SwimScore scores with)
+const CS_MDL = {
+  uaa:  { name: 'UAA', ind: [32,28,27,26,25,24,23,22,20,17,16,15,14,13,12,11,9,7,6,5,4,3,2,1], rel: [64,56,54,52,50,48,46,44,40,34,32,30,28,26,24,22] },
+  ncaa: { name: 'NCAA', ind: [20,17,16,15,14,13,12,11,9,7,6,5,4,3,2,1], rel: [40,34,32,30,28,26,24,22,18,14,12,10,8,6,4,2] },
+  denison: { name: 'Denison', ind: [35,31,30,29,28,27,26,25,24,22,19,18,17,16,15,14,13,12,10,8,7,6,5,4,3,2,1],
+             rel: [70,62,60,58,56,54,52,50,48,44,38,36,34,32,30,28,26,24,20,16,14,12,10,8,6,4,2] }
+};
+const csTime = v => /^\d{1,2}\.\d\d$/.test(v || '') ? ':' + v : (v || '');
+const csYY = y => (y || '').toString().slice(-2);
+
+function csRef() { return R.reportRef || (R.reportRef = {}); }
+function csSaveOpts() {
+  const r = csRef();
+  r.csTitle = document.getElementById('csTitle').value;
+  r.csSide = document.getElementById('csSide').value;
+  r.csNcaa = document.getElementById('csNcaa').checked;
+  r.csPts = document.getElementById('csPts').value;
+  clearTimeout(_refTimer); _refTimer = setTimeout(save, 800);
+}
+function csRenderOpts() {
+  const r = csRef();
+  document.getElementById('csTitle').value = r.csTitle != null ? r.csTitle : 'Race Day: No Excuses';
+  document.getElementById('csSide').value = r.csSide != null ? r.csSide : 'DOMINANCE';
+  document.getElementById('csNcaa').checked = !!r.csNcaa;
+  document.getElementById('csPts').value = r.csPts || 'auto';
+  const q = r.q16 || {}, n = Object.keys(q).length;
+  document.getElementById('q16Status').textContent = n ? `Q 16th: ${n} events from ${r.q16File || 'NCAA psych sheet'}` : 'Q 16th: not loaded';
+}
+// 16th seed per event from an NCAA psych sheet (the "Q 16th" row of the NCAA table)
+async function loadQ16(file) {
+  if (!file) return;
+  const st = document.getElementById('q16Status');
+  try {
+    const pages = await readPdfPages(new Uint8Array(await file.arrayBuffer()));
+    const res = parsePsychSheet(psychColumnLines(pages));
+    const q16 = {};
+    Object.entries(res.entries).forEach(([k, list]) => { if (!isDive(k.split('|')[1]) && list[15] && list[15].seed) q16[k] = list[15].seed; });
+    if (!Object.keys(q16).length) throw new Error('No events with 16 seeded swimmers found — is this the NCAA psych sheet?');
+    Object.assign(csRef(), { q16, q16File: file.name });
+    save(); csRenderOpts();
+  } catch (e) { st.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`; }
+}
+
+function csLabels(yr) {
+  const y = csYY(yr), q = csYY(NCAA_STD_LABEL.match(/(\d{4}) invited/) ? NCAA_STD_LABEL.match(/(\d{4}) invited/)[1] : '');
+  return { seed: 'Seed', ltbt: 'LTBT', sbt: 'SBT', std: 'Std', prior: 'Pre-season', drop: 'Drop', pct: '% Drop', entries: '#',
+    cutA: 'A Cut', cutQ: (q ? q + ' ' : '') + 'Q', cutB: 'B Cut', afinal: (y ? y + ' ' : '') + 'A Fin', bfinal: (y ? y + ' ' : '') + 'B Fin',
+    ncaarec: 'NCAA Rec', vr: 'EU VR' };
+}
+
+function csEventTable(rows, cols, yr) {
+  const L = csLabels(yr);
+  let h = `<table class="cst"><tr><th>Event</th><th>Racer</th>${cols.map(c => `<th>${esc(L[c] || c)}</th>`).join('')}</tr>`;
+  rows.forEach((r, i) => {
+    if (r.first && i) h += `<tr class="sp"><td colspan="${cols.length + 2}"></td></tr>`;
+    h += `<tr><td class="ev">${r.first ? esc(r.event) : ''}</td><td class="nm">${esc(r.name)}</td>` + cols.map(c => {
+      const ev = CS_EVENT_COLS.includes(c), v = ev && !r.first ? '' : r[c];
+      return `<td class="${ev ? 'ec' : 'tc'}">${esc(CS_TIME_COLS.has(c) ? csTime(v) : v)}</td>`;
+    }).join('') + '</tr>';
+  });
+  return h + '</table>';
+}
+
+function csNcaaTable(yr) {
+  const ref = csRef(), aF = parseCuts(ref.aFinal || ''), bF = parseCuts(ref.bFinal || ''), q16 = ref.q16 || {};
+  const y = csYY(yr), qy = csYY((NCAA_STD_LABEL.match(/(\d{4}) invited/) || [])[1]);
+  const evs = Object.keys(CHAMP_DAYS.NCAA.swim).filter(e => !/Relay/.test(e));
+  const lines = [['A Final', (g, e) => refFor(aF, g, e)], ['B Final', (g, e) => refFor(bF, g, e)],
+                 ['Q 16th', (g, e) => q16[g + '|' + e] || ''], ['Q', (g, e) => ((NCAA_STD[g] || {})[e] || [])[2] || '']]
+    .filter(([, f]) => evs.some(e => f('W', e) || f('M', e)));
+  if (!lines.length) return '';
+  const lab = l => (l === 'Q' ? (qy ? qy + ' ' : '') : (y ? y + ' ' : '')) + l;
+  return `<table class="cst csn"><tr><th colspan="2">${esc(yr || '')} NCAA</th><th>W</th><th>M</th></tr>` + evs.map(e =>
+    lines.map(([l, f], i) => `<tr>${i ? '' : `<td class="ev nev" rowspan="${lines.length}">${esc(e)}</td>`}<td class="nm">${esc(lab(l))}</td><td class="tc">${esc(csTime(f('W', e)))}</td><td class="tc">${esc(csTime(f('M', e)))}</td></tr>`).join('')
+  ).join('') + '</table>';
+}
+
+function csPointsTable(key) {
+  const m = CS_MDL[key]; if (!m) return '';
+  return `<table class="cst csp"><tr><th>Place</th><th>Ind.</th><th>Relay</th></tr>` +
+    m.ind.map((p, i) => `<tr><td class="tc">${i + 1}</td><td class="tc">${p}</td><td class="tc">${m.rel[i] != null ? m.rel[i] : ''}</td></tr>`).join('') + '</table>';
+}
+
+function csTablesCol(yr, sched) {
+  const ref = csRef();
+  const n = ref.csNcaa ? csNcaaTable(yr) : '';
+  const ptsKey = ref.csPts === 'none' ? null : ref.csPts && ref.csPts !== 'auto' ? ref.csPts : CS_PTS[sched];
+  const p = ptsKey ? csPointsTable(ptsKey) : '';
+  const side = (ref.csSide != null ? ref.csSide : 'DOMINANCE').trim();
+  if (!n && !p && !side) return '';
+  return `<div class="cstabs">${n ? `<div class="csnw">${n}</div>` : ''}<div class="csright">${p}${side ? `<div class="csside">${[...side].map(c => `<span>${c === ' ' ? '&nbsp;' : esc(c)}</span>`).join('')}</div>` : ''}</div></div>`;
+}
+
+function buildCheerPrint() {
+  const B = buildReportRows();
+  if (B.err) return B.err;
+  const { rows, selectedCols, yr, sched } = B;
+  const cols = CS_ORDER.filter(c => selectedCols.includes(c));
+  // event blocks → columns: one per day, or (no schedule) split evenly by length
+  const blocks = [];
+  rows.forEach(r => { if (r.first) blocks.push([]); blocks[blocks.length - 1].push(r); });
+  let colsOut = [];
+  const days = [...new Set(rows.map(r => r.day || 0))].sort((a, b) => (a || 99) - (b || 99));
+  if (days.some(d => d)) {
+    days.forEach(d => colsOut.push({ title: d ? 'Day ' + d : 'Other events', rows: rows.filter(r => (r.day || 0) === d) }));
+  } else {
+    const total = rows.length + blocks.length, n = Math.max(1, Math.ceil(total / 75)), per = total / n;
+    let cur = [], size = 0;
+    blocks.forEach(b => { if (size >= per && colsOut.length < n - 1) { colsOut.push({ title: '', rows: cur }); cur = []; size = 0; } cur.push(...b); size += b.length + 1; });
+    colsOut.push({ title: '', rows: cur });
+  }
+  const tables = csTablesCol(yr, sched);
+  if (tables) colsOut.push({ title: '', html: tables });
+  const ref = csRef(), title = (ref.csTitle != null ? ref.csTitle : 'Race Day: No Excuses').trim();
+  const pages = [];
+  for (let i = 0; i < colsOut.length; i += 2) pages.push(colsOut.slice(i, i + 2));
+  const el = document.getElementById('cheerPrint');
+  el.innerHTML = pages.map(pg => `<div class="ttpack cspage">${title ? `<div class="cstitle">${esc(title)}</div>` : ''}` +
+    pg.map(c => `<div class="cscol"><div class="csh">${esc(c.title) || '&nbsp;'}</div>${c.html || csEventTable(c.rows, cols, yr)}</div>`).join('') + '</div>').join('');
+  // fit: lay out off-screen at page size, shrink each page's type until both columns fit
+  el.style.cssText = 'display:block;position:absolute;left:-9999px;top:0';
+  el.querySelectorAll('.cspage').forEach(pg => {
+    let fs = 11;
+    const fits = () => [...pg.querySelectorAll('.cscol')].every(c => c.scrollHeight <= c.clientHeight + 1 && c.scrollWidth <= c.clientWidth + 1);
+    pg.style.fontSize = fs + 'px';
+    while (!fits() && fs > 5.5) { fs -= 0.25; pg.style.fontSize = fs + 'px'; }
+  });
+  el.style.cssText = '';
+  return '';
+}
+function printCheerSheet() {
+  const err = buildCheerPrint();
+  if (err) { document.getElementById('reportStatus').innerHTML = `<div class="st sterr">${esc(err)}</div>`; return; }
+  document.getElementById('reportStatus').innerHTML = '';
+  document.body.classList.add('pcheer');
+  appPrint('cheerPrint', 'Cheer Sheet');
+}
+window.addEventListener('afterprint', () => document.body.classList.remove('pcheer'));
 
 // ── CHAMPIONSHIP DAYS ─────────────────────────────────────────────────────
 // Read from the 2026 UAA (Feb 11–14) and NCAA DIII (Mar 18–21) results files.
@@ -3819,7 +4017,7 @@ function printLineup() {
 const isHomeScreenApp = () => window._forcePdf || window.navigator.standalone === true || !!(window.matchMedia && matchMedia('(display-mode: standalone)').matches);
 function appPrint(id, name) {
   if (!isHomeScreenApp()) { window.print(); return; }
-  appPdf(id, name).finally(() => document.body.classList.remove('ptags'));
+  appPdf(id, name).finally(() => document.body.classList.remove('ptags', 'pcheer'));
 }
 function loadScriptOnce(src, test) {
   if (test()) return Promise.resolve();
