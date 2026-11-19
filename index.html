@@ -246,6 +246,7 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing;}
 body.dragging .dh{cursor:grabbing;}
 .pr[data-rk]{min-height:32px;}
 .rwg{opacity:.45;}
+@media (max-width:520px){.rw{column-gap:.3rem!important;}.rw .rwn{font-size:.86rem!important;}.rw > span:not(.rwn){font-size:.62rem!important;}.rw .rwt{font-size:.66rem!important;margin-left:0!important;}}
 .hl{font-family:var(--fm);font-size:.62rem;letter-spacing:.12em;color:var(--gold);padding:.15rem 0 .1rem;}
 .hl.hlb{border-top:1px dashed var(--border);margin-top:.35rem;padding-top:.45rem;}
 .sc{display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:var(--text-dim);}
@@ -1602,6 +1603,9 @@ function renderEventBody(gi){
   var preLocked=mode==='prelim'&&!isTF&&!!(S.liveResults[gi]&&S.liveResults[gi].prelimLocked);
   // Nothing entered yet: show the chalk order dimmed so it can be dragged straight away (first drag commits it)
   var ghost=!res.some(function(x){return x&&x.team;})?chalkSrc(gi,mode):null;
+  // Times from uploaded results; finals not swum yet show the swimmer's prelim time (P) as a guide
+  var tk=function(x){return (x.team||'')+'|'+String(x.name||'').toLowerCase().replace(/[^a-z]/g,'');};
+  var preT={};(prelimRes||[]).forEach(function(x){if(x&&x.team&&x.time)preT[tk(x)]=x.time;});
   var h='';
 
   // Toggle pill
@@ -1691,12 +1695,14 @@ function renderEventBody(gi){
       +(tm&&!preLocked?'<span class="dh" title="Drag to reorder" onpointerdown="drStart(event,'+gi+','+rk+')">&#9776;</span>':'<span class="dh dh0">&#9776;</span>')
       +(rk+1)+(r.dq?' DQ':'')+'</span>';
     // Swimmer name first (what you match to the scoreboard), team beside it; reorder by dragging
-    h+='<div class="rw'+(ghost?' rwg':'')+'" title="'+(exh?'Exhibition: this school already has a relay ahead, so this one does not score':'')+'" style="min-width:0;'+(exh?'opacity:.5;':'')+'display:flex;align-items:baseline;gap:.45rem;overflow:hidden;white-space:nowrap">'
-      +(tm?(r.name&&!ev.isRelay?'<span style="font-size:.95rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
+    h+='<div class="rw'+(ghost?' rwg':'')+'" title="'+(exh?'Exhibition: this school already has a relay ahead, so this one does not score':'')+'" style="min-width:0;'+(exh?'opacity:.5;':'')+'display:flex;flex-wrap:wrap;align-items:baseline;column-gap:.45rem;row-gap:0;overflow:hidden;white-space:nowrap">'
+      +(tm?(r.name&&!ev.isRelay?'<span class="rwn" style="flex-basis:100%;font-size:.95rem;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</span><span style="font-size:.7rem;color:var(--text-dim);font-family:var(--fm)">'+esc(tm)+'</span>'
               :'<span style="font-size:.95rem;font-weight:500;color:var(--text)">'+esc(tm+(ev.isRelay?relayLetterOf(r.name):''))+'</span>')
           :'<span style="color:var(--text-dim);font-size:.75rem">—</span>')
       +(tm&&r.fastHeat?'<span style="font-size:.6rem;font-family:var(--fm);color:var(--gold);border:1px solid var(--gold);border-radius:3px;padding:0 .25rem">FAST HEAT</span>':'')
-      +(tm&&ev.isRelay&&r.legs&&r.legs.length?'<span style="font-size:.68rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis">'+esc(r.legs.map(function(l){return l.split(',')[0];}).join(' · '))+'</span>':'')+'</div>';
+      +(tm&&ev.isRelay&&r.legs&&r.legs.length?'<span style="font-size:.68rem;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis">'+esc(r.legs.map(function(l){return l.split(',')[0];}).join(' · '))+'</span>':'')
+      +(tm?(r.time&&!ghost?'<span class="rwt" style="margin-left:auto;font-family:var(--fm);font-size:.8rem;color:var(--text)">'+esc(r.time)+'</span>'
+          :mode==='final'&&!isTF&&preT[tk(r)]?'<span class="rwt" style="margin-left:auto;font-family:var(--fm);font-size:.72rem;color:var(--text-dim)" title="Prelim time">P '+esc(preT[tk(r)])+'</span>':''):'')+'</div>';
     h+=refCell;
     h+=rk===0?'<label class="sc"><input type="checkbox" disabled style="opacity:.2"></label>':'<label class="sc" title="Ties with place '+(rk)+' above"><input type="checkbox" '+tie2+(preLocked?' disabled':'')+' onchange="setLR('+gi+','+rk+',\'tie\',this.checked)"></label>';
     h+='<label class="sc"><input type="checkbox" '+sc2+(preLocked?' disabled':'')+' onchange="setLR('+gi+','+rk+',\'scratch\',this.checked)"></label>';
