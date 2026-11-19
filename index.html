@@ -2577,8 +2577,9 @@ function showMeetReport(){
   var teams=data.teams,rows=data.rows,totals=data.totals,home=data.home;
 
   if(!rows.length){
-    document.getElementById('meetReportBody').innerHTML='<div style="color:var(--text-dim);font-size:.82rem;padding:.5rem 0">No final results entered yet.</div>';
+    document.getElementById('meetReportBody').innerHTML='<div style="color:var(--text-dim);font-size:.82rem;padding:.5rem 0">No scored finals yet. Finals filled from prelims count once you drag them into order, Score as is, or upload finals results.</div>';
     document.getElementById('meetReportCard').style.display='block';
+    document.getElementById('meetReportCard').scrollIntoView({behavior:'smooth'});
     return;
   }
 
