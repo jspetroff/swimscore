@@ -2938,16 +2938,18 @@ async function rpReadPages(bytes){
   return pages;
 }
 var RP_TIME=/^x?((?:\d+:)?\d+\.\d\d)[A-Za-z*]?$/;
-var RP_YEAR=/^(FR|SO|JR|SR|GS|GR|FY|5Y|6Y|5TH)$/i;   // FY = first-year (Rochester)
+var RP_YEAR=/^(FR|SO|JR|SR|GS|GR|G|FY|5Y|6Y|5TH|S0|F0)$/i;   // FY = first-year (Rochester); G = grad; S0/F0 = zero typed for O
 // → {meet, isResults, isPsych, events:[{num, gender, name, mode, rows:[{place, tie, team, exh}]}]}
 function rpParseResults(pages){
   var out={meet:'',isResults:false,isPsych:false,events:[]},cur=null,hdrMode=null;
   // Two-column PDFs: the right column starts at its event headings. Worked out once for the whole PDF —
   // a page can have headings in only one column.
   var headX=[];
-  pages.forEach(function(p){p.forEach(function(i){if(/^\(?Event\s+\d+/.test((i.str||'').trim())&&headX.indexOf(Math.round(i.x))<0)headX.push(Math.round(i.x));});});
+  // Headings are "Event 3 Women…" or (Denison) "#3 Women…"; pages can have 1, 2 or 3 columns.
+  pages.forEach(function(p){p.forEach(function(i){if(/^\(?(Event\s+\d+|#\d+(\s|$))/.test((i.str||'').trim())&&headX.indexOf(Math.round(i.x))<0)headX.push(Math.round(i.x));});});
   headX.sort(function(a,b){return a-b;});
-  var docCut=headX.length&&headX[headX.length-1]-headX[0]>150?headX[headX.length-1]-6:Infinity;
+  var colStarts=[];headX.forEach(function(x){if(!colStarts.length||x-colStarts[colStarts.length-1]>150)colStarts.push(x);});
+  var colCuts=colStarts.slice(1).map(function(x){return x-6;});
   pages.forEach(function(items){
     items=items.filter(function(i){return i.str&&i.str.trim();}).map(function(i){return{str:i.str.trim(),x:i.x,y:i.y};});
     if(items.some(function(i){return /Psych Sheet/i.test(i.str);}))out.isPsych=true;
@@ -2958,15 +2960,16 @@ function rpParseResults(pages){
     if(!out.meet&&title)out.meet=title.str.replace(/\s+-\s+\d{1,2}\/\d{1,2}\/\d{4}.*$/,'').trim();
     var topY=resIt?resIt.y-2:title?title.y-2:Infinity;
     var body=items.filter(function(i){return i.y<topY;});
-    var cut=docCut;
-    [body.filter(function(i){return i.x<cut;}),body.filter(function(i){return i.x>=cut;})].forEach(function(ci){
+    var colsOnPage=[];for(var c=0;c<=colCuts.length;c++)colsOnPage.push([]);
+    body.forEach(function(i){var c=0;while(c<colCuts.length&&i.x>=colCuts[c])c++;colsOnPage[c].push(i);});
+    colsOnPage.forEach(function(ci){
       var rows=[];
       ci.forEach(function(it){var r=rows.find(function(r){return Math.abs(r.y-it.y)<2.5;});if(!r){r={y:it.y,items:[]};rows.push(r);}r.items.push(it);});
       rows.sort(function(a,b){return b.y-a.y;});
       rows.forEach(function(r){
         var t=r.items.sort(function(a,b){return a.x-b.x;}).map(function(i){return i.str;});
         var line=t.join(' ');
-        var h=line.match(/^(?:[A-Z] - Final\s*\.*\s*)?\(?Event\s+(\d+)\s+(Women|Men|Girls|Boys|Mixed)\s+(.+?)\)?$/i);
+        var h=line.match(/^(?:[A-Z] - Final\s*\.*\s*)?\(?(?:Event\s+|#)(\d+)\s+(Women|Men|Girls|Boys|Mixed)\s+(.+?)\)?$/i);
         if(h){
           var num=+h[1],g=/^(Women|Girls)/i.test(h[2])?'Women':/^(Men|Boys)/i.test(h[2])?'Men':'Mixed';
           if(cur&&cur.num===num&&cur.gender===g)return;              // continuation heading
@@ -2999,9 +3002,13 @@ function rpParseResults(pages){
         var team,who='';
         if(isRel){team=t[1];var lt=/^[A-F]$/.test(t[2]||'')?t[2]:(cur.nextLetter||'');cur.nextLetter='';who=team+(lt?' '+lt:'');}   // "1 Emory University A 1:33.08 1:32.77"
         else{
-          if(!/,/.test(t[1]||''))return;                             // "<place> Last, First YR Team ..."
-          var k=2;if(t[k]&&(RP_YEAR.test(t[k])||/^\d{1,2}$/.test(t[k])))k++;   // class year or age
-          team=t[k];who=t[1];
+          // "<place> Last, First YR Team ...". A name can come in pieces: some PDFs draw "fi"/"ff" as a separate
+          // glyph (pdf.js reads it as ϐ), e.g. "Max" "ϐ" "ield, Ella" = Maxfield. The name is everything before the year.
+          var k=-1;
+          for(var q=2;q<Math.min(t.length,8);q++){if(RP_YEAR.test(t[q])||/^\d{1,2}$/.test(t[q])){k=q;break;}}
+          if(k>1){who=t.slice(1,k).join(' ').replace(/\s*ϐ\s*/g,'f');team=t[k+1];}
+          else{who=t[1]||'';team=t[2];}
+          if(!/,/.test(who))return;
         }
         if(!team||RP_TIME.test(team))return;
         cur.lastRow={place:+pm[2],tie:!!pm[1],team:team,name:who,exh:/^x/.test(last),time:(last.match(RP_TIME)||[])[1]||''};
@@ -3015,7 +3022,10 @@ function rpParseResults(pages){
 }
 
 // PDF event → SwimScore event index
-function rpNorm(s){return String(s||'').toLowerCase().replace(/\byard\b|\byd\b/g,'').replace(/individual medley/g,'im').replace(/\s+/g,' ').trim();}
+// Same event however it's spelled: "500 Yard Free" (Denison results) = "500 Freestyle" (psych), "Fly" = "Butterfly"…
+function rpNorm(s){return String(s||'').toLowerCase().replace(/\byard\b|\byd\b/g,'').replace(/individual medley/g,'im')
+  .replace(/\bfreestyle\b/g,'free').replace(/\bbackstroke\b/g,'back').replace(/\bbreaststroke\b/g,'breast').replace(/\bbutterfly\b/g,'fly')
+  .replace(/\s+/g,' ').trim();}
 function rpMatchEvent(pe){
   var dive=pe.name.match(/^(\d)\s*(?:mtr|meter|m)\b.*Diving/i);
   if(dive){
