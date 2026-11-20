@@ -541,6 +541,10 @@ body.dragging .dh{cursor:grabbing;}
   <!-- TAB 5: ANALYSIS (home team) -->
   <div id="tab-ath" class="tp">
     <div class="card">
+      <div class="ct" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem"><span id="fsHdr">Finals Sheet</span><button class="btn bsm" onclick="printFinalsSheet()">&#128424; Print</button></div>
+      <div id="fsBody"></div>
+    </div>
+    <div class="card">
       <div class="ct" id="athPtsHdr">Points by Athlete</div>
       <select id="swTeam" style="display:none"></select>
       <div id="swPts"></div>
@@ -2099,10 +2103,106 @@ function erBests(sw,erEv,dive,meetDate){
   return {sb:sb,lt:lt};
 }
 
+// ── FINALS SHEET (home team, by event: prelim splits beside finals splits) ─
+// Every individual swim event with prelims uploaded and a home swimmer in a final.
+// Finals side stays blank (to write in) until finals results are uploaded, then compares.
+function fsSec(t){if(!t)return null;var m=String(t).replace(/[^\d:.]/g,'').split(':');var v=m.length>1?(+m[0])*60+(+m[1]):+m[0];return isNaN(v)||!v?null:v;}
+function fsDiff(a,b){var x=fsSec(a),y=fsSec(b);if(x==null||y==null)return '';var d=y-x;return (d>0?'+':d<0?'−':'±')+Math.abs(d).toFixed(2);}
+function finalsSheetData(){
+  var home=S.homeTeam,F=finSize(),out=[];
+  S.events.forEach(function(ev,gi){
+    if(ev.isRelay||isDiving(ev)||isTimedFinal(ev)||!evOn(ev))return;
+    var d=getLR(gi);
+    if(!d.prelim.some(function(x){return x&&x.team;}))return;
+    var n=mpts(false).length,finDone=!isPending(gi),rows=[];
+    d.prelim.forEach(function(x,rk){
+      if(!x||x.team!==home||!x.name||x.scratch||x.dq||rk>=n)return;
+      var fi=-1;if(finDone)d.final.forEach(function(y,j){if(fi<0&&y&&y.team===home&&y.name===x.name)fi=j;});
+      var fr=fi>=0?d.final[fi]:null;
+      rows.push({name:x.name,fin:'ABC'.charAt(Math.floor(rk/F)),pPlace:rk+1,pTime:x.time||'',pSpl:x.splits||[],
+        fPlace:fr&&!fr.scratch&&!fr.dq?fi+1:null,fTime:fr&&fr.time||'',fSpl:fr&&fr.splits||[],fNote:fr?(fr.scratch?'scratch':fr.dq?'DQ':''):''});
+    });
+    if(!rows.length)return;
+    var dist=+((ev.name.match(/^(\d+)/)||[])[1])||0;
+    var nSpl=dist?Math.max(1,Math.round(dist/50)):0;
+    rows.forEach(function(r){nSpl=Math.max(nSpl,r.pSpl.length,r.fSpl.length);});
+    out.push({ev:ev,gi:gi,rows:rows,nSpl:nSpl,dist:dist,finDone:rows.some(function(r){return r.fTime;})});
+  });
+  return out;
+}
+function finalsSheetHtml(list){
+  function ord(n){var t=['th','st','nd','rd'],v=n%100;return n+(t[(v-20)%10]||t[v]||t[0]);}
+  var h='';
+  list.forEach(function(e){
+    var N=e.nSpl,hd='<th class="fsnm">Swimmer</th><th></th>';
+    for(var i=0;i<N;i++)hd+='<th>'+(e.dist&&N?Math.round(e.dist*(i+1)/N):50*(i+1))+'</th>';
+    hd+='<th class="fstt">Time</th><th>Place</th>';
+    h+='<div class="fsev"><div class="fseh">#'+esc(e.ev.num)+' '+esc(e.ev.gender)+' '+esc(e.ev.name)+'</div><div class="fsx"><table class="fst"><thead><tr>'+hd+'</tr></thead>';
+    e.rows.forEach(function(r){
+      var pc='',fc='',dc='';
+      for(var i=0;i<N;i++){
+        var p=r.pSpl[i]||'',f=r.fSpl[i]||'';
+        pc+='<td>'+esc(p)+'</td>';
+        fc+='<td class="fsbl">'+esc(f)+'</td>';
+        var df=f?fsDiff(p,f):'';dc+='<td class="'+(df.charAt(0)==='−'?'fsup':df.charAt(0)==='+'?'fsdn':'')+'">'+df+'</td>';
+      }
+      var tdf=r.fTime?fsDiff(r.pTime,r.fTime):'';
+      h+='<tbody class="fsb"><tr class="fsr1"><td class="fsnm" rowspan="'+(r.fTime?3:2)+'"><b>'+esc(r.name)+'</b><span class="fsfl">'+r.fin+' final</span></td><td class="fslb">Prelim</td>'+pc+'<td class="fstt">'+esc(r.pTime)+'</td><td>'+ord(r.pPlace)+'</td></tr>'
+        +'<tr><td class="fslb">Final</td>'+fc+'<td class="fstt fsbl">'+esc(r.fTime||r.fNote)+'</td><td class="fsbl">'+(r.fPlace?ord(r.fPlace):'')+'</td></tr>'
+        +(r.fTime?'<tr class="fsdr"><td class="fslb">±</td>'+dc+'<td class="fstt '+(tdf.charAt(0)==='−'?'fsup':tdf.charAt(0)==='+'?'fsdn':'')+'">'+tdf+'</td><td>'+(r.fPlace&&r.fPlace!==r.pPlace?(r.fPlace<r.pPlace?'▲'+(r.pPlace-r.fPlace):'▼'+(r.fPlace-r.pPlace)):'')+'</td></tr>':'')+'</tbody>';
+    });
+    h+='</table></div></div>';
+  });
+  return h;
+}
+var FS_CSS='.fsev{margin:.2rem 0 1rem}.fsb{break-inside:avoid}.fseh{break-after:avoid}.fseh{font-weight:600;font-size:.88rem;margin-bottom:.3rem}'
+ +'.fsx{overflow-x:auto;-webkit-overflow-scrolling:touch}'
+ +'.fst{border-collapse:collapse;font-size:.74rem;width:100%}'
+ +'.fst th{font-family:var(--fm,monospace);font-size:.6rem;font-weight:400;color:var(--text-dim,#777);text-align:right;padding:.15rem .3rem;white-space:nowrap;border-bottom:1px solid var(--border,#ccc)}'
+ +'.fst td{font-family:var(--fm,monospace);text-align:right;padding:.2rem .3rem;white-space:nowrap}'
+ +'.fst th.fsnm,.fst td.fsnm{text-align:left;font-family:inherit;white-space:normal;min-width:7rem;vertical-align:top;border-top:1px solid var(--border,#ccc)}'
+ +'.fst td.fsnm{position:sticky;left:0;background:var(--bg2,#fff);z-index:1}'
+ +'.fst tr.fsr1 td{border-top:1px solid var(--border,#ccc)}.fsnm b{display:block;font-weight:600}'
+ +'.fsfl{font-family:var(--fm,monospace);font-size:.62rem;color:var(--gold,#8a6d00)}'
+ +'.fslb{text-align:left!important;font-size:.62rem;color:var(--text-dim,#777)}.fstt{font-weight:600}'
+ +'.fst td.fsbl{border-bottom:1px dotted var(--border,#bbb);min-width:2.6rem}'
+ +'.fsup{color:#1a8a4a}.fsdn{color:#c0392b}.fsdr td{font-size:.66rem}';
+function renderFinalsSheet(){
+  var box=document.getElementById('fsBody');if(!box)return;
+  if(!document.getElementById('fsCss')){var st=document.createElement('style');st.id='fsCss';st.textContent=FS_CSS;document.head.appendChild(st);}
+  var list=finalsSheetData();
+  document.getElementById('fsHdr').textContent='Finals Sheet — '+S.homeTeam;
+  box.innerHTML=list.length?finalsSheetHtml(list):'<div style="color:var(--text-dim);font-size:.82rem">No '+esc(S.homeTeam)+' finalists yet. Upload a prelims results PDF on the Live tab; splits come from that file. Upload the finals results and the sheet compares them.</div>';
+}
+function printFinalsSheet(){
+  var list=finalsSheetData();if(!list.length){alert('Nothing to print yet — upload prelims results first.');return;}
+  var w=window.open('','_blank');if(!w){alert('Allow pop-ups to print the finals sheet.');return;}
+  w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(S.homeTeam)+' finals sheet</title>'
+    +'<style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111;margin:18px}h1{font-size:15px;margin:0 0 2px}.sub{font-size:11px;color:#666;margin-bottom:10px}'
+    +FS_CSS+'.fsx{overflow:visible}.fst td.fsbl{height:1.25rem}@media print{body{margin:0}@page{size:landscape;margin:.4in}}</style></head><body>'
+    +'<h1>'+esc(S.homeTeam)+' finals sheet — '+esc(S.meetName||'')+'</h1><div class="sub">Prelim splits for each '+esc(S.homeTeam)+' finalist; finals line to fill in (or filled from the finals results)</div>'
+    +finalsSheetHtml(list)+'<script>setTimeout(function(){window.print();},300)<\/script></body></html>');
+  w.document.close();
+}
+// Splits as read from the results → per-50 splits. Handles plain per-50 splits (27.75 30.44 …),
+// cumulative times (26.18 55.34 …) and HY-TEK "cumulative (split)" pairs (25.03 52.13 (27.10) …)
+function rpSplits(toks,time){
+  if(!toks||!toks.length)return [];
+  function sec(v){var m=v.split(':');return m.length>1?(+m[0])*60+(+m[1]):+v;}
+  var ok=function(t){return /^(\d+:)?\d+\.\d\d$/.test(t);};
+  var cum=toks.filter(function(t){return !/^\(/.test(t)&&ok(t);});
+  var hasPar=toks.some(function(t){return /^\(/.test(t);});
+  var c=cum.map(sec),tt=time?sec(String(time).replace(/[^\d:.]/g,'')):null;
+  var inc=c.length>1&&c.every(function(v,i){return !i||v>c[i-1];});
+  if(hasPar||(inc&&tt&&Math.abs(c[c.length-1]-tt)<0.02))
+    return c.map(function(v,i){return (i?v-c[i-1]:v).toFixed(2);});
+  return cum;
+}
+
 // ── ATHLETES TAB ─────────────────────────────────────────────────────────
 function renderAth(){
   var h1=document.getElementById('athPtsHdr');if(h1)h1.textContent='Points by Athlete — '+S.homeTeam;
-  updSwimmerPts();renderAthSwims();
+  renderFinalsSheet();updSwimmerPts();renderAthSwims();
   erLoad(true).then(function(){renderAthSwims();});     // fresh season/lifetime bests each time the tab opens
 }
 function tSec(t){
@@ -2718,7 +2818,7 @@ function updLB(){
   updLiveBreakdown();
   updFinalsBreakdown();
   updSwimmerPts();
-  if(document.getElementById('tab-ath').classList.contains('act'))renderAthSwims();
+  if(document.getElementById('tab-ath').classList.contains('act')){renderAthSwims();renderFinalsSheet();}
 }
 
 
@@ -2995,6 +3095,11 @@ function rpParseResults(pages){
         var isRel=/Relay/i.test(cur.name);
         // Relays: the letter (A/B) sits on its own line above the row; the four swimmers on the line below
         if(isRel&&/^[A-F]$/.test(line)){cur.nextLetter=line;return;}
+        // Individual splits: "r:+0.77 27.75 30.44 …" and following lines of times, under the row above
+        if(!isRel&&(/^r:/.test(line)||/^(\(?(\d+:)?\d+\.\d\d\)?\s*)+$/.test(line))){
+          if(cur.lastRow){var sp=line.replace(/^r:\S+\s*/,'').split(/\s+/).filter(Boolean);(cur.lastRow.rawSplits=cur.lastRow.rawSplits||[]).push.apply(cur.lastRow.rawSplits,sp);}
+          return;
+        }
         if(isRel&&/^1\)/.test(line)){
           if(cur.lastRow)cur.lastRow.legs=line.split(/\s*\b[1-4]\)\s*/).filter(function(x){return x.trim();})
             .map(function(x){var w=x.trim().split(/\s+/);if(w.length>1&&RP_YEAR.test(w[w.length-1]))w.pop();return w.join(' ');});
@@ -3111,6 +3216,7 @@ function rpApply(){
       if(arr.length>=cap)return;
       var row={team:team,name:r.name||'',scratch:false,dq:false,tie:!!(prev&&prev.place===r.place)};
       if(r.time)row.time=r.time;     // swim time (or dive score) from the results
+      if(r.rawSplits&&!ev.isRelay){var spl=rpSplits(r.rawSplits,r.time);if(spl.length)row.splits=spl;}
       if(r.legs&&r.legs.length)row.legs=r.legs;
       arr.push(row);
       prev=r;
