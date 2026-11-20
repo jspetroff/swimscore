@@ -989,6 +989,7 @@ function uiRestore() {
     if (el) { el.parentNode.querySelectorAll('.fpill').forEach(p => p.classList.remove('act')); el.classList.add('act'); }
   } });
   if (u.uaav) Object.assign(_uaav, u.uaav);
+  if (u.ncv) Object.assign(_ncv, u.ncv);
   if (u.d3view) _d3l.view = u.d3view;
   const tab = u.tab && [...document.querySelectorAll('.tab')].find(t => (t.getAttribute('onclick') || '').includes(`'${u.tab}'`));
   if (tab && document.getElementById('tab-' + u.tab)) switchTab(u.tab, tab);
@@ -2140,6 +2141,7 @@ function printTopTimesPack() {
 function ttPrintHtml() {
   if (_tt.kind === 'relay') return ttRelayPrintHtml();
   if (_tt.kind === 'uaa') return uaaPrintHtml();
+  if (_tt.kind === 'd3list' && _d3l.view === 'proj') return uaaPrintHtml();
   if (_tt.kind === 'd3list' && _d3l.view === 'swimmer') {
     const S = window._d3Swim; if (!S || !S.people.length) return '';
     const nG = S.people.filter(p => p.tier === 'g').length, nY = S.people.filter(p => p.tier === 'y').length;
@@ -2289,7 +2291,7 @@ async function loadD3Ranks(fileList) {
       const [mo, da, yr] = (res.reportDate || '').split('/');
       const iso = yr ? `${yr}-${mo.padStart(2, '0')}-${da.padStart(2, '0')}` : new Date().toISOString().slice(0, 10);
       R.d3Ranks[g] = { file: f.name, date: iso, season: seasonOf(iso), rows: res.rows, lists: res.lists };
-      try { await d3SaveList(g, { file: f.name, date: iso, events: res.full }); }
+      try { await d3SaveList(g, { file: f.name, date: iso, events: res.full, relays: res.relays }); }
       catch (e) { msgs.push(`<div class="st sterr">${g === 'W' ? 'Women' : 'Men'}: ranks saved, but the full list couldn't be saved (${esc(e.code || e.message)}) — it won't show on Standards.</div>`); }
       msgs.push(`<div class="st stok">✓ ${esc(f.name)} → ${g === 'W' ? 'Women' : 'Men'} · ${res.rows.length} Emory ranks · report ${res.reportDate || iso}</div>`);
     } catch (e) {
@@ -3501,6 +3503,7 @@ async function d3LoadList(g) {
 function renderD3List() {
   if (_tt.kind !== 'd3list') return;
   uiSave({ d3view: _d3l.view });
+  if (_d3l.view === 'proj') { renderProj('ncaa'); return; }
   const box = document.getElementById('ttList'); if (!box) return;
   const g = _tt.gender, L = window._d3Lists[g];
   const msg = t => `<div class="card"><div class="ct">NCAA DIII Top Times — ${g === 'W' ? 'Women' : 'Men'}</div><div style="color:var(--text-dim);font-size:.82rem">${t}</div></div>`;
@@ -3573,7 +3576,7 @@ function renderD3List() {
   }).join('');
   box.innerHTML = `<div class="card" style="grid-column:1/-1">
       <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
-        <div class="fbar" style="margin:0"><div class="fpill ${swimView ? '' : 'act'}" onclick="_d3l.view='event';renderD3List()">By event</div><div class="fpill ${swimView ? 'act' : ''}" onclick="_d3l.view='swimmer';renderD3List()">Our swimmers</div></div>
+        <div class="fbar" style="margin:0"><div class="fpill ${swimView ? '' : 'act'}" onclick="_d3l.view='event';renderD3List()">By event</div><div class="fpill ${swimView ? 'act' : ''}" onclick="_d3l.view='swimmer';renderD3List()">Our swimmers</div><div class="fpill" onclick="_d3l.view='proj';_ncv.view='roster';renderD3List()">Proj. roster</div><div class="fpill" onclick="_d3l.view='proj';_ncv.view='event';renderD3List()">Proj. by event</div><div class="fpill" onclick="_d3l.view='proj';_ncv.view='teams';renderD3List()">Team scores</div></div>
         ${swimView ? `<select onchange="_d3l.swTeam=this.value;renderD3List()" style="width:auto;max-width:240px">${teamNames.map(t => `<option value="${esc(t)}" ${t === swTeam ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>` : `<select onchange="_d3l.team=this.value;renderD3List()" style="width:auto;max-width:240px"><option value="">All teams</option>${
           teamList.map(t => `<option value="${esc(t)}" ${t === _d3l.team ? 'selected' : ''}>${esc(t)} (${teams[t]})</option>`).join('')}</select>
         <select onchange="_d3l.top=+this.value;renderD3List()" style="width:auto" ${_d3l.team ? 'disabled title="A team shows all its swimmers"' : ''}>${
@@ -4474,9 +4477,27 @@ async function loadUaaRanks(fileList) {
   renderTopTimes();
   st.insertAdjacentHTML('afterbegin', msgs.join(''));
 }
-const uaaDivers = g => { const v = ((R.uaaCfg || {}).divers || {})[g]; return v == null ? 3 : v; };
-function uaaSetDivers(g, v) { const n = Math.max(0, Math.round(+v) || 0); R.uaaCfg = R.uaaCfg || {}; R.uaaCfg.divers = Object.assign({}, R.uaaCfg.divers, { [g]: n }); save(); renderUaa(); }
-const uaaSwimSpots = g => UAA_SPOTS - Math.ceil(uaaDivers(g) / 3);   // 3 divers take one roster spot
+// The same projection runs for the UAA meet (UAA report) and NCAAs (the full DIII report), with each meet's rules.
+// NCAA DIII (pre-championship manual): 16 places, 20-17-16-15-14-13-12-11-9-7-6-5-4-3-2-1, relays double;
+// one relay per team per event; up to 18 competitors per team, a diver counting as one-third.
+const NCAA_PTS = { ind: [20, 17, 16, 15, 14, 13, 12, 11, 9, 7, 6, 5, 4, 3, 2, 1],
+                   rel: [40, 34, 32, 30, 28, 26, 24, 22, 18, 14, 12, 10, 8, 6, 4, 2] };
+const PJ_RULES = {
+  uaa:  { name: 'UAA', pts: UAA_PTS, cap: UAA_SPOTS, bRel: true, cfg: 'uaaCfg', defDivers: 3, report: 'UAA report',
+          scoring: 'UAA scoring (24 places; relays 16)', capNote: '22 roster spots, 3 divers = 1 spot' },
+  ncaa: { name: 'NCAA', pts: NCAA_PTS, cap: 18, bRel: false, cfg: 'ncaaCfg', defDivers: 0, report: 'DIII report',
+          scoring: 'NCAA scoring (16 places; relays double, one per team)', capNote: '18 per team, a diver counts ⅓' },
+};
+let _pjMode = 'uaa';
+const pjR = () => PJ_RULES[_pjMode];
+const pjDivers = g => { const v = ((R[pjR().cfg] || {}).divers || {})[g]; return v == null ? pjR().defDivers : v; };
+function pjSetDivers(mode, g, v) {
+  const n = Math.max(0, Math.round(+v) || 0), k = PJ_RULES[mode].cfg;
+  R[k] = R[k] || {}; R[k].divers = Object.assign({}, R[k].divers, { [g]: n }); save();
+  if (mode === 'uaa') renderUaa(); else renderD3List();
+}
+const pjSwimSpots = g => pjR().cap - Math.ceil(pjDivers(g) / 3);   // 3 divers take one roster spot
+const uaaDivers = g => { const k = _pjMode; _pjMode = 'uaa'; try { return pjDivers(g); } finally { _pjMode = k; } };
 
 const uaaShort = n => n.replace(' Free Relay', ' FR').replace(' Medley Relay', ' MR');
 // One model of the projected UAA meet (per gender), shared by the three views:
@@ -4490,7 +4511,7 @@ const uaaShort = n => n.replace(' Free Relay', ' FR').replace(' Medley Relay', '
 const uaaKey = (tm, n) => tm + '|' + nmNorm(n);
 const uaaOrd = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
 function uaaModel(g, U) {
-  const season = U.season, spots = uaaSwimSpots(g);
+  const season = U.season, spots = pjSwimSpots(g), P = pjR().pts;
   const faster = (list, sec, self) => list.filter(x => x.sec < sec - 0.001 && x.key !== self).length;
   const teamsOnReport = new Set();
   UAA_EVS.forEach(ev => ((U.events || {})[ev] || []).forEach(r => teamsOnReport.add(r.tm)));
@@ -4516,7 +4537,7 @@ function uaaModel(g, U) {
   const raw = {}; all.forEach(p => Object.entries(p.times).forEach(([ev, sec]) => (raw[ev] = raw[ev] || []).push({ key: p.key, sec })));
   all.forEach(p => { p.pick = Object.keys(p.times).sort((a, b) => faster(raw[a], p.times[a], p.key) - faster(raw[b], p.times[b], p.key)).slice(0, 3); });
   // 2. score, keep each team's top N, score again
-  const score = (p, field) => Object.entries(p.times).map(([ev, sec]) => { const place = 1 + faster(field[ev] || [], sec, p.key); return { ev, sec, place, pts: UAA_PTS.ind[place - 1] || 0, src: p.src[ev] }; })
+  const score = (p, field) => Object.entries(p.times).map(([ev, sec]) => { const place = 1 + faster(field[ev] || [], sec, p.key); return { ev, sec, place, pts: P.ind[place - 1] || 0, src: p.src[ev] }; })
     .sort((a, b) => b.pts - a.pts || a.place - b.place);
   let field = fieldOf(all);
   all.forEach(p => { p.ind = score(p, field); p.indTop = p.ind.filter(x => p.pick.includes(x.ev)).reduce((a, x) => a + x.pts, 0); });
@@ -4539,12 +4560,12 @@ function uaaModel(g, U) {
     if (ourRel[0]) A.push({ team: EM, sec: ourRel[0].sec, legs: ourRel[0].order.map(sid => 'E|' + sid), ours: true });
     else if (best[EM]) A.push({ team: EM, sec: best[EM].sec, legs: [], ours: true });
     A.sort((a, b) => a.sec - b.sec).forEach((x, i) => {
-      const place = 1 + A.filter(y => y.sec < x.sec - 0.001).length, pts = UAA_PTS.rel[place - 1] || 0;
+      const place = 1 + A.filter(y => y.sec < x.sec - 0.001).length, pts = P.rel[place - 1] || 0;
       relays.push({ name: def.name, team: x.team, letter: 'A', sec: x.sec, place, pts });
       x.legs.forEach(k => { if (S[k]) { S[k].rel = S[k].rel || []; S[k].rel.push({ name: def.name, letter: 'A', place, pts: pts / 4 }); } });
     });
-    if (ourRel[1]) {   // our B relay: B final, against the other teams' A times
-      const place = 9 + A.filter(y => y.team !== EM && y.sec < ourRel[1].sec - 0.001).length, pts = UAA_PTS.rel[place - 1] || 0;
+    if (pjR().bRel && ourRel[1]) {   // UAA only: our B relay, B final, against the other teams' A times
+      const place = 9 + A.filter(y => y.team !== EM && y.sec < ourRel[1].sec - 0.001).length, pts = P.rel[place - 1] || 0;
       relays.push({ name: def.name, team: EM, letter: 'B', sec: ourRel[1].sec, place, pts, bOnly: true });
       ourRel[1].order.forEach(sid => { const p = S['E|' + sid]; if (p) p.rel.push({ name: def.name, letter: 'B', place, pts: pts / 4 }); });
     }
@@ -4561,7 +4582,7 @@ function uaaModel(g, U) {
     const ind = Object.values(S).filter(p => p.team === team && kept.has(p.key)).reduce((a, p) => a + p.ind.filter(x => (p.pick || []).includes(x.ev)).reduce((b, x) => b + x.pts, 0), 0);
     const rel = relays.filter(r => r.team === team && r.letter === 'A').reduce((a, r) => a + r.pts, 0);
     return { team, ind, rel, total: ind + rel, swimmers: Object.values(S).filter(p => p.team === team && kept.has(p.key)).length };
-  }).filter(t => t.total > 0 || teamsOnReport.has(t.team)).sort((a, b) => b.total - a.total);
+  }).filter(t => t.total > 0 || (_pjMode === 'uaa' ? teamsOnReport.has(t.team) : t.team === EM)).sort((a, b) => b.total - a.total);
   return { S, EM, field, kept, relays, teams, spots };
 }
 function uaaRoster(M, team) {
@@ -4569,46 +4590,67 @@ function uaaRoster(M, team) {
 }
 
 let _uaav = { view: 'roster', team: '', evTeam: '' };
-function renderUaa() {
-  if (_tt.kind !== 'uaa') return;
-  const box = document.getElementById('ttList'); if (!box) return;
-  const g = _tt.gender, U = window._uaa[g];
-  const msg = t => `<div class="card"><div class="ct">UAA — ${g === 'W' ? 'Women' : 'Men'}</div><div style="color:var(--text-dim);font-size:.82rem">${t}</div></div>`;
-  if (U === undefined) { box.innerHTML = msg('Loading…'); uaaLoad(g); return; }
-  if (!U) { box.innerHTML = msg(`Upload the ${g === 'W' ? "women's" : "men's"} USA Swimming top-times report filtered to the UAA (⇧ UAA, above).`); return; }
+let _ncv = { view: 'roster', team: '', evTeam: '' };   // NCAA projection views (Top Times → NCAA DIII)
+function renderUaa() { if (_tt.kind === 'uaa') renderProj('uaa'); }
+// Roster / By event / Team scores for the projected UAA meet (mode 'uaa') or NCAAs (mode 'ncaa', from the DIII report)
+function renderProj(mode) {
+  _pjMode = mode;
+  const RU = pjR(), box = document.getElementById('ttList'); if (!box) return;
+  const g = _tt.gender, uaa = mode === 'uaa';
+  const V = uaa ? _uaav : _ncv, VN = uaa ? '_uaav' : '_ncv', RN = uaa ? 'renderUaa()' : 'renderD3List()';
+  const msg = t => `<div class="card"><div class="ct">${RU.name} — ${g === 'W' ? 'Women' : 'Men'}</div><div style="color:var(--text-dim);font-size:.82rem">${t}</div></div>`;
+  let U;
+  if (uaa) {
+    U = window._uaa[g];
+    if (U === undefined) { box.innerHTML = msg('Loading…'); uaaLoad(g); return; }
+    if (!U) { box.innerHTML = msg(`Upload the ${g === 'W' ? "women's" : "men's"} USA Swimming top-times report filtered to the UAA (⇧ UAA, above).`); return; }
+  } else {
+    const L = window._d3Lists[g];
+    if (L === undefined) { box.innerHTML = msg('Loading…'); d3LoadList(g); return; }
+    if (!L || !L.events) { box.innerHTML = msg(`Re-upload the ${g === 'W' ? "women's" : "men's"} USA Swimming NCAA Top Times Report (⇧ DIII ranks, above).`); return; }
+    U = { date: L.date, season: seasonOf(L.date), events: L.events, relays: L.relays || {}, noRelays: !L.relays };
+  }
   const M = uaaModel(g, U), spots = M.spots, ord = uaaOrd;
   const teamNames = M.teams.map(t => t.team);
-  if (!_uaav.team || !teamNames.includes(_uaav.team)) _uaav.team = M.EM;
-  if (_uaav.evTeam && !teamNames.includes(_uaav.evTeam)) _uaav.evTeam = '';
-  window._uaaLast = { g, M, U, spots, view: _uaav.view, team: _uaav.team, evTeam: _uaav.evTeam };
-  uiSave({ uaav: { view: _uaav.view, team: _uaav.team, evTeam: _uaav.evTeam } });
-  const fin = p => p <= 8 ? 'a' : p <= 16 ? 'b' : p <= 24 ? 'c' : 'x';
+  if (!V.team || !teamNames.includes(V.team)) V.team = M.EM;
+  if (V.evTeam && !teamNames.includes(V.evTeam)) V.evTeam = '';
+  window._uaaLast = { mode, g, M, U, spots, view: V.view, team: V.team, evTeam: V.evTeam };
+  uiSave(uaa ? { uaav: { view: V.view, team: V.team, evTeam: V.evTeam } } : { ncv: { view: V.view, team: V.team, evTeam: V.evTeam } });
+  const fin = p => p <= 8 ? 'a' : p <= 16 ? 'b' : uaa && p <= 24 ? 'c' : 'x';
   const [y, m, dd] = U.date.split('-');
-  const pill = (v, l) => `<div class="fpill ${_uaav.view === v ? 'act' : ''}" onclick="_uaav.view='${v}';renderUaa()">${l}</div>`;
-  const teamSel = (key, withAll) => `<select onchange="_uaav.${key}=this.value;renderUaa()" style="width:auto;max-width:200px">${withAll ? '<option value="">All teams</option>' : ''}${teamNames.map(t => `<option value="${esc(t)}" ${t === _uaav[key] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  const go = uaa ? '' : "_d3l.view='proj';";
+  const pill = (v, l) => `<div class="fpill ${V.view === v ? 'act' : ''}" onclick="${go}${VN}.view='${v}';${RN}">${l}</div>`;
+  const back = uaa ? '' : `<div class="fpill" onclick="_d3l.view='event';renderD3List()">Lists</div><div class="fpill" onclick="_d3l.view='swimmer';renderD3List()">Our swimmers</div>`;
+  const teamSel = (key, withAll) => `<select onchange="${VN}.${key}=this.value;${RN}" style="width:auto;max-width:200px">${withAll ? '<option value="">All teams</option>' : ''}${teamNames.map(t => `<option value="${esc(t)}" ${t === V[key] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  const relNote = uaa ? `<b>A</b>/<b>B</b> badges = on that relay (ours: the Relays tab's fastest A and B; other teams: their fastest relay on the report)`
+    : U.noRelays ? `<b>relays not included</b> — re-upload the DIII report (⇧ DIII ranks) to add them`
+    : `<b>A</b> badge = on that relay (one per team: ours, the Relays tab's fastest; other teams, their fastest on the report)`;
   const head = `<div class="card" style="grid-column:1/-1">
       <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;font-size:.8rem">
-        <div class="fbar" style="margin:0">${pill('roster', 'Roster')}${pill('event', 'By event')}${pill('teams', 'Team scores')}</div>
-        ${_uaav.view === 'roster' ? teamSel('team') : _uaav.view === 'event' ? teamSel('evTeam', true) : ''}
-        <span style="margin-left:.4rem">Divers going:</span><input type="number" min="0" max="9" value="${uaaDivers(g)}" onchange="uaaSetDivers('${g}',this.value)" style="width:4rem;padding:.25rem .4rem">
-        <span style="color:var(--text-dim)">→ <b>${spots}</b> swimmer spots</span>
+        <div class="fbar" style="margin:0">${back}${pill('roster', uaa ? 'Roster' : 'Proj. roster')}${pill('event', uaa ? 'By event' : 'Proj. by event')}${pill('teams', 'Team scores')}</div>
+        ${V.view === 'roster' ? teamSel('team') : V.view === 'event' ? teamSel('evTeam', true) : ''}
+        <span style="margin-left:.4rem">Divers going:</span><input type="number" min="0" max="9" value="${pjDivers(g)}" onchange="pjSetDivers('${mode}','${g}',this.value)" style="width:4rem;padding:.25rem .4rem">
+        <span style="color:var(--text-dim)">→ <b>${spots}</b> swimmer spots (${RU.capNote})</span>
 </div>
-      <div style="font-size:.7rem;color:var(--text-dim);margin-top:.5rem;font-family:var(--fm);line-height:1.5">UAA report ${+m}/${+dd}/${y} · NCAA championship events, UAA scoring (24 places; relays 16) · Emory at best time this season ·
-        everyone swims their best 3 events; each team's top ${spots} swimmers score · swimmers ranked on individual points; <b>A</b>/<b>B</b> badges = on that relay (ours: the Relays tab's fastest A and B; other teams: their fastest relay on the report).</div>
-      <div style="font-size:.7rem;margin-top:.4rem;display:flex;gap:.6rem;flex-wrap:wrap"><span class="uchip u-a">A final 1–8</span><span class="uchip u-b">B final 9–16</span><span class="uchip u-c">C final 17–24</span></div></div>`;
+      <div style="font-size:.7rem;color:var(--text-dim);margin-top:.5rem;font-family:var(--fm);line-height:1.5">${RU.report} ${+m}/${+dd}/${y} · NCAA championship events, ${RU.scoring} · Emory at best time this season ·
+        everyone swims their best 3 events; each team's top ${spots} swimmers score · swimmers ranked on individual points; ${relNote}.</div>
+      <div style="font-size:.7rem;margin-top:.4rem;display:flex;gap:.6rem;flex-wrap:wrap"><span class="uchip u-a">A final 1–8</span><span class="uchip u-b">B final 9–16</span>${uaa ? '<span class="uchip u-c">C final 17–24</span>' : ''}</div></div>`;
   let body = '';
-  if (_uaav.view === 'teams') {
+  if (V.view === 'teams') {
     body = `<div class="card" style="grid-column:1/-1"><div class="ct">Projected team scores — swimming</div>
       <table class="tbl"><thead><tr><th>#</th><th>Team</th><th style="text-align:right">Total</th><th style="text-align:right">Individual</th><th style="text-align:right">A relays</th><th style="text-align:right">Swimmers scoring</th></tr></thead><tbody>${
-      M.teams.map((t, i) => `<tr style="${t.team === M.EM ? 'font-weight:700' : ''}"><td class="tt-rank">${i + 1}</td><td><a href="#" onclick="_uaav.view='roster';_uaav.team='${esc(t.team).replace(/'/g, "\\'")}';renderUaa();return false" style="color:inherit">${esc(t.team)}</a></td>
+      M.teams.map((t, i) => `<tr style="${t.team === M.EM ? 'font-weight:700' : ''}"><td class="tt-rank">${i + 1}</td><td><a href="#" onclick="${go}${VN}.view='roster';${VN}.team='${esc(t.team).replace(/'/g, "\\'")}';${RN};return false" style="color:inherit">${esc(t.team)}</a></td>
         <td class="ttime" style="text-align:right">${Math.round(t.total)}</td><td class="ttime" style="text-align:right">${Math.round(t.ind)}</td><td class="ttime" style="text-align:right">${Math.round(t.rel)}</td><td class="ttime" style="text-align:right">${M.S && Object.values(M.S).filter(p => p.team === t.team && M.kept.has(p.key) && p.ind.some(x => (p.pick || []).includes(x.ev) && x.pts)).length}</td></tr>`).join('')}</tbody></table>
-      <div style="font-size:.72rem;color:var(--text-dim);margin-top:.5rem">Individual points of each team's top ${spots} swimmers in their best 3 events, plus A relays. B relays and diving aren't included — the report has no B relays or diving. Tap a team to see its roster.</div></div>`;
-  } else if (_uaav.view === 'event') {
+      <div style="font-size:.72rem;color:var(--text-dim);margin-top:.5rem">${uaa ? `Individual points of each team's top ${spots} swimmers in their best 3 events, plus A relays. B relays and diving aren't included — the report has no B relays or diving.`
+        : `Individual points of each team's top ${spots} swimmers in their best 3 events, plus relays (one per team). Diving isn't included — the report has no diving.${U.noRelays ? ' Relays aren\'t included yet: re-upload the DIII report.' : ''} Teams that don't score aren't listed.`} Tap a team to see its roster.</div></div>`;
+  } else if (V.view === 'event') {
     const cards = UAA_EVS.filter(ev => ((U.events || {})[ev] || []).length || Object.values(M.S).some(p => p.times[ev])).map(ev => {
-      const entries = Object.values(M.S).filter(p => p.times[ev] && (!_uaav.evTeam || p.team === _uaav.evTeam)).map(p => {
+      const entries = Object.values(M.S).filter(p => p.times[ev] && (!V.evTeam || p.team === V.evTeam)).map(p => {
         const sc = p.ind.find(x => x.ev === ev), proj = M.kept.has(p.key) && (p.pick || []).includes(ev);
         return { p, sec: p.times[ev], rank: p.rank[ev], newer: p.src[ev] === 'newer', proj, sc };
-      }).sort((a, b) => a.sec - b.sec);
+      }).sort((a, b) => a.sec - b.sec)
+        // NCAA: the whole DIII report is long — show the projected top 24 and every Emory swimmer (a picked team shows all)
+        .filter(e => uaa || V.evTeam || e.p.team === M.EM || (e.proj && e.sc.place <= 24));
       if (!entries.length) return '';
       return `<div class="card"><div class="ct" style="display:flex;justify-content:space-between"><span>${esc(ev)}</span><span>${entries.filter(e => e.proj).length} projected</span></div>
         <table class="tbl"><tbody>${entries.map(e => `<tr class="${e.proj ? 'urow-' + fin(e.sc.place) : 'urow-off'}"${e.newer ? ' style="font-style:italic"' : ''}>
@@ -4617,9 +4659,9 @@ function renderUaa() {
           <td class="ttime" style="text-align:right;white-space:nowrap">${secToTime(e.sec)}</td>
           <td style="text-align:right;white-space:nowrap;font-family:var(--fm);font-size:.72rem">${e.proj ? `${ord(e.sc.place)} · ${e.sc.pts}` : '<span style="color:var(--text-dim)">—</span>'}</td></tr>`).join('')}</tbody></table></div>`;
     }).join('');
-    body = `<div class="card" style="grid-column:1/-1;font-size:.75rem;color:var(--text-dim)">Every time on the report (Emory: best this season, <i>italic</i> = newer than the report). Right column: projected place and points for swimmers projected to swim that event (their best 3, on their team's top ${spots}); grey rows aren't projected to swim it.</div>${cards}`;
+    body = `<div class="card" style="grid-column:1/-1;font-size:.75rem;color:var(--text-dim)">${uaa ? 'Every time on the report' : "The projected top 24 in each event plus every Emory swimmer (pick a team to see all of its swimmers)"} (Emory: best this season, <i>italic</i> = newer than the report). Right column: projected place and points for swimmers projected to swim that event (their best 3, on their team's top ${spots}); grey rows aren't projected to swim it.</div>${cards}`;
   } else {
-    const rows = uaaRoster(M, _uaav.team), isEm = _uaav.team === M.EM;
+    const rows = uaaRoster(M, V.team), isEm = V.team === M.EM;
     const chip = (x, used) => `<span class="uchip u-${fin(x.place)}${used ? '' : ' u-off'}" title="${secToTime(x.sec)}${used ? '' : ' · not counted'}">${ord(x.place)} ${esc(x.ev)} · ${x.pts}</span>`;
     const badges = p => ['A', 'B'].map(L => { const l = p.rel.filter(r => r.letter === L); return l.length ? `<span class="urel"><span class="ubadge ub-${L}">${L}</span>${l.map(r => uaaShort(r.name)).join(' · ')}</span>` : ''; }).join('');
     const row = (p, i) => { const s = p.sid && R.swimmers[p.sid], below = i >= spots, flag = below && p.onA;
@@ -4628,33 +4670,35 @@ function renderUaa() {
         <span style="width:13rem;flex:none"><span style="font-weight:700;font-size:.82rem">${esc(p.name)} ${s ? classBadge(s) : ''}</span>${flag ? ' <span class="ubadge ub-flag" title="Below the cutoff but on an A relay">A relay</span>' : ''}<div style="margin-top:.2rem">${badges(p)}</div></span>
         <span style="width:3rem;flex:none;font-family:var(--fm);font-weight:700;text-align:right;padding-right:.6rem">${p.total}</span>
         <span style="display:flex;flex-wrap:wrap;gap:.3rem;flex:1">${p.ind.filter(x => x.pts).map((x, k) => chip(x, k < p.nInd)).join('')}${!p.ind.some(x => x.pts) ? '<span style="font-size:.72rem;color:var(--text-dim)">no scoring swims projected</span>' : ''}</span></div>`; };
-    const nDiv = isEm ? uaaDivers(g) : null;
+    const nDiv = isEm ? pjDivers(g) : null;
     const list = rows.map((p, i) => (i === spots ? `<div style="border-top:2px dashed var(--gold);margin:.4rem 0;padding-top:.3rem;font-size:.7rem;color:var(--gold);font-family:var(--fm)">— ${spots} swimmer spots${isEm && nDiv ? ` + ${nDiv} diver${nDiv === 1 ? '' : 's'}` : ''} —</div>` : '') + row(p, i)).join('');
     const inPts = rows.slice(0, spots).reduce((a, p) => a + p.total, 0);
     const belowA = rows.slice(spots).filter(p => p.onA).length;
-    body = `<div class="card" style="grid-column:1/-1;font-size:.85rem"><b>${esc(_uaav.team)} — top ${spots}: ${Math.round(inPts)} projected individual points</b>${belowA ? ` <span style="color:var(--gold)">· ${belowA} on an A relay below the cutoff (highlighted)</span>` : ''}</div>
+    body = `<div class="card" style="grid-column:1/-1;font-size:.85rem"><b>${esc(V.team)} — top ${spots}: ${Math.round(inPts)} projected individual points</b>${belowA ? ` <span style="color:var(--gold)">· ${belowA} on an A relay below the cutoff (highlighted)</span>` : ''}</div>
       <div class="card" style="grid-column:1/-1">${list || '<div style="color:var(--text-dim);font-size:.82rem">No swimmers.</div>'}</div>`;
   }
   box.innerHTML = head + body;
 }
 function uaaPrintHtml() {
   const L = window._uaaLast; if (!L) return '';
-  const { g, M, U, spots, view } = L, ord = uaaOrd, fin = p => p <= 8 ? 'a' : p <= 16 ? 'b' : p <= 24 ? 'c' : 'x', G = g === 'W' ? 'Women' : 'Men';
-  const hdr = t => `<div class="ph"><b>${t} — ${G}</b> &nbsp;UAA report ${U.date} · printed ${new Date().toLocaleDateString()}</div>`;
-  if (view === 'teams') return hdr('UAA projected team scores') + `<div class="pm">Swimming only: each team's top ${spots} swimmers in their best 3 events + A relays (no B relays or diving on the report).</div>
+  _pjMode = L.mode || 'uaa';
+  const RU = pjR(), uaa = _pjMode === 'uaa';
+  const { g, M, U, spots, view } = L, ord = uaaOrd, fin = p => p <= 8 ? 'a' : p <= 16 ? 'b' : uaa && p <= 24 ? 'c' : 'x', G = g === 'W' ? 'Women' : 'Men';
+  const hdr = t => `<div class="ph"><b>${t} — ${G}</b> &nbsp;${RU.report} ${U.date} · printed ${new Date().toLocaleDateString()}</div>`;
+  if (view === 'teams') return hdr(`${RU.name} projected team scores`) + `<div class="pm">Swimming only: each team's top ${spots} swimmers in their best 3 events + ${uaa ? 'A relays (no B relays or diving on the report)' : (U.noRelays ? 'no relays (re-upload the DIII report to add them)' : 'relays, one per team (no diving on the report)')}. ${RU.scoring}.</div>
     <table class="pt st"><tr><th>#</th><th>Team</th><th class="r">Total</th><th class="r">Individual</th><th class="r">A relays</th></tr>${M.teams.map((t, i) => `<tr${t.team === M.EM ? ' style="font-weight:700"' : ''}><td>${i + 1}</td><td>${esc(t.team)}</td><td class="r">${Math.round(t.total)}</td><td class="r">${Math.round(t.ind)}</td><td class="r">${Math.round(t.rel)}</td></tr>`).join('')}</table>`;
   if (view === 'event') {
     const body = UAA_EVS.map(ev => { const es = Object.values(M.S).filter(p => p.times[ev] && (!L.evTeam || p.team === L.evTeam) && M.kept.has(p.key) && (p.pick || []).includes(ev)).sort((a, b) => a.times[ev] - b.times[ev]);
       return es.length ? `<table class="pt"><tr><th colspan="4">${esc(ev)}</th></tr>${es.map(p => { const sc = p.ind.find(x => x.ev === ev);
         return `<tr class="${'upr-' + fin(sc.place)}"${p.team === M.EM ? ' style="font-weight:700"' : ''}><td class="r">${ord(sc.place)}</td><td class="n">${esc(p.name)} <span class="pc">${esc(p.team)}</span></td><td class="r">${secToTime(p.times[ev])}</td><td class="r">${sc.pts}</td></tr>`; }).join('')}</table>` : ''; }).join('');
-    return hdr('UAA projected results' + (L.evTeam ? ' · ' + esc(L.evTeam) : '')) + `<div class="pm">Projected entries only (each swimmer's best 3 events, each team's top ${spots}). Place · time · points.</div><div class="pcols pcols2 d3print">${body}</div>`;
+    return hdr(`${RU.name} projected results` + (L.evTeam ? ' · ' + esc(L.evTeam) : '')) + `<div class="pm">Projected entries only (each swimmer's best 3 events, each team's top ${spots}). Place · time · points.</div><div class="pcols pcols2 d3print">${body}</div>`;
   }
   const rows = uaaRoster(M, L.team), isEm = L.team === M.EM;
   const rel = p => ['A', 'B'].map(Lt => { const l = p.rel.filter(r => r.letter === Lt); return l.length ? `<b>${Lt}</b> ${l.map(r => uaaShort(r.name)).join(', ')}` : ''; }).filter(Boolean).join(' · ');
-  const trs = rows.map((p, i) => (i === spots ? `<tr><td colspan="5" style="border-top:2px dashed #000;font-size:8px;padding:2px 0">— ${spots} swimmer spots${isEm ? ` + ${uaaDivers(g)} divers` : ''} —</td></tr>` : '') +
+  const trs = rows.map((p, i) => (i === spots ? `<tr><td colspan="5" style="border-top:2px dashed #000;font-size:8px;padding:2px 0">— ${spots} swimmer spots${isEm && pjDivers(g) ? ` + ${pjDivers(g)} divers` : ''} —</td></tr>` : '') +
     `<tr${i >= spots && !p.onA ? ' style="color:#555"' : ''}><td class="r" style="width:20px">${i + 1}</td><td class="n" style="width:22%;font-weight:700">${esc(p.name)}${i >= spots && p.onA ? ' ⚑' : ''}</td><td class="r" style="width:28px"><b>${p.total}</b></td>
     <td style="white-space:normal">${p.ind.filter(x => x.pts).slice(0, 3).map(x => `<span class="upchip up-${fin(x.place)}">${ord(x.place)} ${esc(x.ev)} ${x.pts}</span>`).join(' ')}</td><td style="white-space:normal;width:24%;font-size:8.5px">${rel(p)}</td></tr>`).join('');
-  return hdr(`UAA projected roster — ${esc(L.team)}`) + `<div class="pm">Ranked on projected UAA individual points (best 3 events). A/B = on that relay${isEm ? " (Relays tab's fastest A and B)" : ' (their fastest relay on the report)'}; ⚑ = below the cutoff but on an A relay. Green = A final, yellow = B, orange = C.</div>
+  return hdr(`${RU.name} projected roster — ${esc(L.team)}`) + `<div class="pm">Ranked on projected ${RU.name} individual points (best 3 events). ${uaa ? 'A/B' : 'A'} = on that relay${isEm ? (uaa ? " (Relays tab's fastest A and B)" : " (Relays tab's fastest)") : ' (their fastest relay on the report)'}; ⚑ = below the cutoff but on an A relay. Green = A final, yellow = B${uaa ? ', orange = C' : ''}.</div>
     <table class="pt d3sw" style="font-size:9.5px">${trs}</table>`;
 }
 
