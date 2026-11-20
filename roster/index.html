@@ -4551,7 +4551,8 @@ function uaaModel(g, U) {
   _rl.season = season; _rl.code = 'all';
   let bank; try { bank = relayBank(g); } finally { _rl.season = keep.season; _rl.code = keep.code; }
   const relays = [];
-  RELAY_DEFS.forEach(def => {
+  // no relays on the saved report (a DIII report uploaded before relays were kept): leave relays out for every team
+  (U.noRelays ? [] : RELAY_DEFS).forEach(def => {
     const A = [];   // {team, sec, legs:[key]}
     const best = {}; ((U.relays || {})[def.name] || []).forEach(r => { const sec = timeToSec(r.t); if (sec && (!best[r.tm] || sec < best[r.tm].sec)) best[r.tm] = { team: r.tm, sec, names: r.names }; });
     Object.values(best).filter(b => b.team !== EM).forEach(b => A.push({ team: b.team, sec: b.sec,
