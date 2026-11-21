@@ -2146,7 +2146,9 @@ function finalsSheetHtml(list){
     if(e.day!==day){day=e.day;h+='<div class="fsses">'+esc(fsDayName(day))+'</div>';}
     h+='<div class="fsev"><div class="fseh">#'+esc(e.ev.num)+' '+esc(e.ev.gender)+' '+esc(e.ev.name)+'</div><div class="fsgrid">';
     e.rows.forEach(function(r){
-      var cmp=!!r.fTime,t='<table class="fst"><thead><tr><th></th><th>Prelim</th><th>Final</th>'+(cmp?'<th>±</th>':'')+'</tr></thead><tbody>';
+      var cmp=!!r.fTime,mv=r.fPlace&&r.fPlace!==r.pPlace?(r.fPlace<r.pPlace?'\u25b2'+(r.pPlace-r.fPlace):'\u25bc'+(r.fPlace-r.pPlace)):'';
+      var t='<table class="fst"><thead><tr class="fspl"><th></th><th>'+ord(r.pPlace)+'</th><th>'+(r.fPlace?ord(r.fPlace):'')+'</th>'+(cmp?'<th>'+mv+'</th>':'')+'</tr>'
+        +'<tr><th></th><th>Prelim</th><th>Final</th>'+(cmp?'<th>±</th>':'')+'</tr></thead><tbody>';
       for(var i=0;i<N;i++){
         var p=r.pSpl[i]||'',f=r.fSpl[i]||'',df=f?fsDiff(p,f):'';
         t+='<tr><td class="fslb">'+(e.dist&&N?Math.round(e.dist*(i+1)/N):50*(i+1))+'</td><td>'+esc(p)+'</td><td class="fsbl">'+esc(f)+'</td>'+(cmp?'<td class="'+cls(df)+'">'+df+'</td>':'')+'</tr>';
@@ -2182,6 +2184,7 @@ var FS_CSS='.fsses{font-family:var(--fm,monospace);font-size:.68rem;letter-spaci
  +'.fsfl{font-family:var(--fm,monospace);font-size:.62rem;color:var(--gold,#8a6d00);white-space:nowrap}'
  +'.fst{border-collapse:collapse;width:100%;font-family:var(--fm,monospace);font-size:.74rem}'
  +'.fst th{font-size:.58rem;font-weight:400;color:var(--text-dim,#777);text-align:right;padding:.1rem .3rem;border-bottom:1px solid var(--border,#ccc)}'
+ +'.fst tr.fspl th{border-bottom:0;padding-bottom:0;font-family:var(--fm,monospace);font-size:.68rem;color:var(--text,#111)}'
  +'.fst td{text-align:right;padding:.16rem .3rem;white-space:nowrap}'
  +'.fslb{text-align:left!important;font-size:.62rem;color:var(--text-dim,#777)}'
  +'.fst td.fsbl{border-bottom:1px dotted var(--border,#bbb);min-width:3.4rem}'
