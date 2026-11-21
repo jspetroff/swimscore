@@ -2014,7 +2014,7 @@ function liveSwimmerPts(){
           x.legs.forEach(function(leg){
             var lk=x.team+'|'+leg;
             if(!out[lk])out[lk]={name:leg,team:x.team,relay:false,noname:false,pts:0,swims:[]};
-            out[lk].pts+=each/4;out[lk].swims.push({ev:ev,place:rk+1,pts:each/4,leg:true});
+            out[lk].pts+=each/4;out[lk].swims.push({ev:ev,place:rk+1,pts:each/4,leg:true,time:x.time||''});
           });
           continue;
         }
@@ -2023,7 +2023,7 @@ function liveSwimmerPts(){
         var key=x.team+'|'+nm;
         if(!out[key])out[key]={name:nm||'No name saved',team:x.team,relay:!!ev.isRelay,noname:!nm,pts:0,swims:[]};
         out[key].pts+=each;
-        out[key].swims.push({ev:ev,place:rk+1,pts:each});
+        out[key].swims.push({ev:ev,place:rk+1,pts:each,time:x.time||''});
       }
       i=j;
     }
@@ -2347,7 +2347,7 @@ function updSwimmerPts(){
       var ds=r.swims.filter(function(sw){return isDiving(sw.ev);}),ss=r.swims.filter(function(sw){return !isDiving(sw.ev);});
       if(ds.length){
         var g=dive[r.team]||(dive[r.team]={name:'Diving',team:r.team,relay:false,noname:false,pts:0,swims:[],divers:{}});
-        ds.forEach(function(sw){g.pts+=sw.pts;g.swims.push({ev:sw.ev,place:sw.place,pts:sw.pts,diver:r.name});});
+        ds.forEach(function(sw){g.pts+=sw.pts;g.swims.push({ev:sw.ev,place:sw.place,pts:sw.pts,time:sw.time,diver:r.name});});
         g.divers[r.name]=1;
       }
       if(ss.length)kept.push({name:r.name,team:r.team,relay:false,noname:false,swims:ss,pts:ss.reduce(function(a,sw){return a+sw.pts;},0)});
@@ -2366,21 +2366,22 @@ function updSwimmerPts(){
   list.forEach(function(r){
     tot+=r.pts;
     var i=rn++;
-    function swLine(s){return '<div>'+esc(s.diver?s.ev.name.replace(/\s*Springboard$/i,''):r.relay?s.ev.name.replace(/\s*Relay$/i,''):s.ev.name.replace(/\s*Relay$/i,' relay'))+' <span style="color:var(--text-dim);white-space:nowrap">'+ord(s.place)+' &middot; '+fmt(s.pts)+'</span></div>';}
+    function swLine(s){return '<div>'+esc(s.diver?s.ev.name.replace(/\s*Springboard$/i,''):r.relay?s.ev.name.replace(/\s*Relay$/i,''):s.ev.name.replace(/\s*Relay$/i,' relay'))+' <span style="color:var(--text-dim);white-space:nowrap">'+ord(s.place)+(s.time?' &middot; <span style="font-family:var(--fm);color:var(--text)">'+esc(s.time)+'</span>':'')+' &middot; '+fmt(s.pts)+'</span></div>';}
     var sw;
     if(r.divers){
       // Diving row: each diver with their own total, then their dives
       var byD={};r.swims.forEach(function(s){(byD[s.diver]=byD[s.diver]||[]).push(s);});
       sw=Object.keys(byD).map(function(d){return{d:d,sw:byD[d],t:byD[d].reduce(function(a,s){return a+s.pts;},0)};})
         .sort(function(a,b){return b.t-a.t||a.d.localeCompare(b.d);})
-        .map(function(g,gi2){return '<div style="'+(gi2?'margin-top:.35rem;':'')+'font-weight:600;color:var(--text);display:flex;justify-content:space-between;gap:.5rem"><span>'+esc(g.d)+'</span><span>'+fmt(g.t)+'</span></div>'
+        .map(function(g,gi2,arr){return '<div style="'+(gi2?'margin-top:.35rem;':'')+'font-weight:600;color:var(--text)">'+esc(g.d)+(arr.length>1?' <span style="font-weight:400;color:var(--text-dim)">&middot; '+fmt(g.t)+' pts</span>':'')+'</div>'
           +'<div style="padding-left:.6rem">'+g.sw.sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('')+'</div>';}).join('');
     } else if(!r.relay&&!r.noname){
       // Swimmer row: individual swims and relay legs, each with its own subtotal
       sw=[['Individual',r.swims.filter(function(s){return !s.leg;})],['Relays',r.swims.filter(function(s){return s.leg;})]]
-        .filter(function(g){return g[1].length;})
-        .map(function(g,gi2){var t=g[1].reduce(function(a,s){return a+s.pts;},0);
-          return '<div style="'+(gi2?'margin-top:.35rem;':'')+'font-weight:600;color:var(--text);display:flex;justify-content:space-between;gap:.5rem"><span>'+g[0]+'</span><span>'+fmt(t)+'</span></div>'
+        .filter(function(g){return g[1].length;});
+      sw=sw.length===1?sw[0][1].sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('')   // one kind of swim: its subtotal would just repeat the total
+        :sw.map(function(g,gi2){var t=g[1].reduce(function(a,s){return a+s.pts;},0);
+          return '<div style="'+(gi2?'margin-top:.35rem;':'')+'font-weight:600;color:var(--text)">'+g[0]+' <span style="font-weight:400;color:var(--text-dim)">&middot; '+fmt(t)+' pts</span></div>'
             +'<div style="padding-left:.6rem">'+g[1].sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('')+'</div>';}).join('');
     } else sw=r.swims.sort(function(a,b){return a.ev.num-b.ev.num;}).map(swLine).join('');
     h+='<tr><td>'+(i<0?'':i+1)+'</td><td style="min-width:6.5rem;'+(r.relay||r.noname?'color:var(--text-dim)':'font-weight:500')+'">'+esc(r.name)+'</td>'
