@@ -2132,41 +2132,38 @@ function finalsSheetData(){
 }
 function finalsSheetHtml(list){
   function ord(n){var t=['th','st','nd','rd'],v=n%100;return n+(t[(v-20)%10]||t[v]||t[0]);}
+  function cls(d){return d.charAt(0)==='−'?'fsup':d.charAt(0)==='+'?'fsdn':'';}
   var h='';
   list.forEach(function(e){
-    var N=e.nSpl,hd='<th class="fsnm">Swimmer</th><th></th>';
-    for(var i=0;i<N;i++)hd+='<th>'+(e.dist&&N?Math.round(e.dist*(i+1)/N):50*(i+1))+'</th>';
-    hd+='<th class="fstt">Time</th><th>Place</th>';
-    h+='<div class="fsev"><div class="fseh">#'+esc(e.ev.num)+' '+esc(e.ev.gender)+' '+esc(e.ev.name)+'</div><div class="fsx"><table class="fst"><thead><tr>'+hd+'</tr></thead>';
+    var N=e.nSpl;
+    h+='<div class="fsev"><div class="fseh">#'+esc(e.ev.num)+' '+esc(e.ev.gender)+' '+esc(e.ev.name)+'</div><div class="fsgrid">';
     e.rows.forEach(function(r){
-      var pc='',fc='',dc='';
+      var cmp=!!r.fTime,t='<table class="fst"><thead><tr><th></th><th>Prelim</th><th>Final</th>'+(cmp?'<th>±</th>':'')+'</tr></thead><tbody>';
       for(var i=0;i<N;i++){
-        var p=r.pSpl[i]||'',f=r.fSpl[i]||'';
-        pc+='<td>'+esc(p)+'</td>';
-        fc+='<td class="fsbl">'+esc(f)+'</td>';
-        var df=f?fsDiff(p,f):'';dc+='<td class="'+(df.charAt(0)==='−'?'fsup':df.charAt(0)==='+'?'fsdn':'')+'">'+df+'</td>';
+        var p=r.pSpl[i]||'',f=r.fSpl[i]||'',df=f?fsDiff(p,f):'';
+        t+='<tr><td class="fslb">'+(e.dist&&N?Math.round(e.dist*(i+1)/N):50*(i+1))+'</td><td>'+esc(p)+'</td><td class="fsbl">'+esc(f)+'</td>'+(cmp?'<td class="'+cls(df)+'">'+df+'</td>':'')+'</tr>';
       }
-      var tdf=r.fTime?fsDiff(r.pTime,r.fTime):'';
-      h+='<tbody class="fsb"><tr class="fsr1"><td class="fsnm" rowspan="'+(r.fTime?3:2)+'"><b>'+esc(r.name)+'</b><span class="fsfl">'+r.fin+' final</span></td><td class="fslb">Prelim</td>'+pc+'<td class="fstt">'+esc(r.pTime)+'</td><td>'+ord(r.pPlace)+'</td></tr>'
-        +'<tr><td class="fslb">Final</td>'+fc+'<td class="fstt fsbl">'+esc(r.fTime||r.fNote)+'</td><td class="fsbl">'+(r.fPlace?ord(r.fPlace):'')+'</td></tr>'
-        +(r.fTime?'<tr class="fsdr"><td class="fslb">±</td>'+dc+'<td class="fstt '+(tdf.charAt(0)==='−'?'fsup':tdf.charAt(0)==='+'?'fsdn':'')+'">'+tdf+'</td><td>'+(r.fPlace&&r.fPlace!==r.pPlace?(r.fPlace<r.pPlace?'▲'+(r.pPlace-r.fPlace):'▼'+(r.fPlace-r.pPlace)):'')+'</td></tr>':'')+'</tbody>';
+      var tdf=cmp?fsDiff(r.pTime,r.fTime):'';
+      t+='<tr class="fstot"><td class="fslb">Time</td><td>'+esc(r.pTime)+'</td><td class="fsbl">'+esc(r.fTime||r.fNote)+'</td>'+(cmp?'<td class="'+cls(tdf)+'">'+tdf+'</td>':'')+'</tr>'
+        +'<tr><td class="fslb">Place</td><td>'+ord(r.pPlace)+'</td><td class="fsbl">'+(r.fPlace?ord(r.fPlace):'')+'</td>'+(cmp?'<td>'+(r.fPlace&&r.fPlace!==r.pPlace?(r.fPlace<r.pPlace?'▲'+(r.pPlace-r.fPlace):'▼'+(r.fPlace-r.pPlace)):'')+'</td>':'')+'</tr></tbody></table>';
+      h+='<div class="fsc"><div class="fsnm"><b>'+esc(r.name)+'</b><span class="fsfl">'+r.fin+' final</span></div>'+t+'</div>';
     });
-    h+='</table></div></div>';
+    h+='</div></div>';
   });
   return h;
 }
-var FS_CSS='.fsev{margin:.2rem 0 1rem}.fsb{break-inside:avoid}.fseh{break-after:avoid}.fseh{font-weight:600;font-size:.88rem;margin-bottom:.3rem}'
- +'.fsx{overflow-x:auto;-webkit-overflow-scrolling:touch}'
- +'.fst{border-collapse:collapse;font-size:.74rem;width:100%}'
- +'.fst th{font-family:var(--fm,monospace);font-size:.6rem;font-weight:400;color:var(--text-dim,#777);text-align:right;padding:.15rem .3rem;white-space:nowrap;border-bottom:1px solid var(--border,#ccc)}'
- +'.fst td{font-family:var(--fm,monospace);text-align:right;padding:.2rem .3rem;white-space:nowrap}'
- +'.fst th.fsnm,.fst td.fsnm{text-align:left;font-family:inherit;white-space:normal;min-width:7rem;vertical-align:top;border-top:1px solid var(--border,#ccc)}'
- +'.fst td.fsnm{position:sticky;left:0;background:var(--bg2,#fff);z-index:1}'
- +'.fst tr.fsr1 td{border-top:1px solid var(--border,#ccc)}.fsnm b{display:block;font-weight:600}'
- +'.fsfl{font-family:var(--fm,monospace);font-size:.62rem;color:var(--gold,#8a6d00)}'
- +'.fslb{text-align:left!important;font-size:.62rem;color:var(--text-dim,#777)}.fstt{font-weight:600}'
- +'.fst td.fsbl{border-bottom:1px dotted var(--border,#bbb);min-width:2.6rem}'
- +'.fsup{color:#1a8a4a}.fsdn{color:#c0392b}.fsdr td{font-size:.66rem}';
+var FS_CSS='.fsev{margin:.2rem 0 1.1rem}.fseh{font-weight:600;font-size:.88rem;margin-bottom:.4rem;break-after:avoid}'
+ +'.fsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.6rem}'
+ +'.fsc{border:1px solid var(--border,#ccc);border-radius:6px;padding:.45rem .55rem;break-inside:avoid}'
+ +'.fsnm{display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;margin-bottom:.25rem}.fsnm b{font-weight:600;font-size:.84rem}'
+ +'.fsfl{font-family:var(--fm,monospace);font-size:.62rem;color:var(--gold,#8a6d00);white-space:nowrap}'
+ +'.fst{border-collapse:collapse;width:100%;font-family:var(--fm,monospace);font-size:.74rem}'
+ +'.fst th{font-size:.58rem;font-weight:400;color:var(--text-dim,#777);text-align:right;padding:.1rem .3rem;border-bottom:1px solid var(--border,#ccc)}'
+ +'.fst td{text-align:right;padding:.16rem .3rem;white-space:nowrap}'
+ +'.fslb{text-align:left!important;font-size:.62rem;color:var(--text-dim,#777)}'
+ +'.fst td.fsbl{border-bottom:1px dotted var(--border,#bbb);min-width:3.4rem}'
+ +'.fstot td{font-weight:600;border-top:1px solid var(--border,#ccc)}'
+ +'.fsup{color:#1a8a4a}.fsdn{color:#c0392b}';
 function renderFinalsSheet(){
   var box=document.getElementById('fsBody');if(!box)return;
   if(!document.getElementById('fsCss')){var st=document.createElement('style');st.id='fsCss';st.textContent=FS_CSS;document.head.appendChild(st);}
@@ -2179,7 +2176,7 @@ function printFinalsSheet(){
   var w=window.open('','_blank');if(!w){alert('Allow pop-ups to print the finals sheet.');return;}
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(S.homeTeam)+' finals sheet</title>'
     +'<style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111;margin:18px}h1{font-size:15px;margin:0 0 2px}.sub{font-size:11px;color:#666;margin-bottom:10px}'
-    +FS_CSS+'.fsx{overflow:visible}.fst td.fsbl{height:1.25rem}@media print{body{margin:0}@page{size:landscape;margin:.4in}}</style></head><body>'
+    +FS_CSS+'.fst td.fsbl{height:1.2rem}.fsgrid{grid-template-columns:repeat(4,1fr)}@media print{body{margin:0}@page{margin:.4in}}</style></head><body>'
     +'<h1>'+esc(S.homeTeam)+' finals sheet — '+esc(S.meetName||'')+'</h1><div class="sub">Prelim splits for each '+esc(S.homeTeam)+' finalist; finals line to fill in (or filled from the finals results)</div>'
     +finalsSheetHtml(list)+'<script>setTimeout(function(){window.print();},300)<\/script></body></html>');
   w.document.close();
