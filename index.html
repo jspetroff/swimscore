@@ -2126,16 +2126,17 @@ function finalsSheetData(){
     var dist=+((ev.name.match(/^(\d+)/)||[])[1])||0;
     var nSpl=dist?Math.max(1,Math.round(dist/50)):0;
     rows.forEach(function(r){nSpl=Math.max(nSpl,r.pSpl.length,r.fSpl.length);});
-    out.push({ev:ev,gi:gi,rows:rows,nSpl:nSpl,dist:dist,finDone:rows.some(function(r){return r.fTime;})});
+    out.push({ev:ev,gi:gi,day:ev.day||0,rows:rows,nSpl:nSpl,dist:dist,finDone:rows.some(function(r){return r.fTime;})});
   });
   return out;
 }
 function finalsSheetHtml(list){
   function ord(n){var t=['th','st','nd','rd'],v=n%100;return n+(t[(v-20)%10]||t[v]||t[0]);}
   function cls(d){return d.charAt(0)==='−'?'fsup':d.charAt(0)==='+'?'fsdn':'';}
-  var h='';
-  list.forEach(function(e){
+  var h='',day=null;
+  list.slice().sort(function(a,b){return (a.day-b.day)||(a.ev.num-b.ev.num);}).forEach(function(e){
     var N=e.nSpl;
+    if(e.day!==day){day=e.day;h+='<div class="fsses">'+esc(fsDayName(day))+'</div>';}
     h+='<div class="fsev"><div class="fseh">#'+esc(e.ev.num)+' '+esc(e.ev.gender)+' '+esc(e.ev.name)+'</div><div class="fsgrid">';
     e.rows.forEach(function(r){
       var cmp=!!r.fTime,t='<table class="fst"><thead><tr><th></th><th>Prelim</th><th>Final</th>'+(cmp?'<th>±</th>':'')+'</tr></thead><tbody>';
@@ -2152,7 +2153,22 @@ function finalsSheetHtml(list){
   });
   return h;
 }
-var FS_CSS='.fsev{margin:.2rem 0 1.1rem}.fseh{font-weight:600;font-size:.88rem;margin-bottom:.4rem;break-after:avoid}'
+// Session (meet day) label: "Day 2 · Fri" when the meet date is set
+function fsDayName(d){
+  if(!d)return 'No session set';
+  var t='Day '+d;
+  if(S.meetDate){var dt=new Date(S.meetDate+'T12:00:00');if(!isNaN(dt)){dt.setDate(dt.getDate()+d-1);t+=' \u00b7 '+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];}}
+  return t+' finals';
+}
+var fsDay=null;   // session shown on the Finals Sheet: a day number, 'all', or null = latest session with finalists
+function fsPick(list){
+  var days=[];list.forEach(function(e){if(days.indexOf(e.day)<0)days.push(e.day);});days.sort(function(a,b){return a-b;});
+  var cur=fsDay==='all'||days.indexOf(fsDay)>=0?fsDay:days[days.length-1];
+  return {days:days,cur:cur,list:cur==='all'?list:list.filter(function(e){return e.day===cur;})};
+}
+function setFsDay(d){fsDay=d;renderFinalsSheet();}
+var FS_CSS='.fsses{font-family:var(--fm,monospace);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold,#8a6d00);margin:.9rem 0 .45rem;padding-bottom:.2rem;border-bottom:1px solid var(--border,#ccc);break-after:avoid}.fsses:first-child{margin-top:.2rem}'
+ +'.fsev{margin:.2rem 0 1.1rem}.fseh{font-weight:600;font-size:.88rem;margin-bottom:.4rem;break-after:avoid}'
  +'.fsgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:.6rem}'
  +'.fsc{border:1px solid var(--border,#ccc);border-radius:6px;padding:.45rem .55rem;break-inside:avoid}'
  +'.fsnm{display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;margin-bottom:.25rem}.fsnm b{font-weight:600;font-size:.84rem}'
@@ -2167,12 +2183,13 @@ var FS_CSS='.fsev{margin:.2rem 0 1.1rem}.fseh{font-weight:600;font-size:.88rem;m
 function renderFinalsSheet(){
   var box=document.getElementById('fsBody');if(!box)return;
   if(!document.getElementById('fsCss')){var st=document.createElement('style');st.id='fsCss';st.textContent=FS_CSS;document.head.appendChild(st);}
-  var list=finalsSheetData();
+  var all=finalsSheetData(),pk=fsPick(all),list=pk.list;
+  var pills=pk.days.length>1?'<div class="sp" style="margin-bottom:.4rem">'+pk.days.map(function(d){return '<div class="pill'+(pk.cur===d?' active':'')+'" onclick="setFsDay('+d+')">'+esc(fsDayName(d).replace(/ finals$/,''))+'</div>';}).join('')+'<div class="pill'+(pk.cur==='all'?' active':'')+'" onclick="setFsDay(\'all\')">All</div></div>':'';
   document.getElementById('fsHdr').textContent='Finals Sheet — '+S.homeTeam;
-  box.innerHTML=list.length?finalsSheetHtml(list):'<div style="color:var(--text-dim);font-size:.82rem">No '+esc(S.homeTeam)+' finalists yet. Upload a prelims results PDF on the Live tab; splits come from that file. Upload the finals results and the sheet compares them.</div>';
+  box.innerHTML=list.length?pills+finalsSheetHtml(list):'<div style="color:var(--text-dim);font-size:.82rem">No '+esc(S.homeTeam)+' finalists yet. Upload a prelims results PDF on the Live tab; splits come from that file. Upload the finals results and the sheet compares them.</div>';
 }
 function printFinalsSheet(){
-  var list=finalsSheetData();if(!list.length){alert('Nothing to print yet — upload prelims results first.');return;}
+  var list=fsPick(finalsSheetData()).list;if(!list.length){alert('Nothing to print yet — upload prelims results first.');return;}
   var w=window.open('','_blank');if(!w){alert('Allow pop-ups to print the finals sheet.');return;}
   w.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(S.homeTeam)+' finals sheet</title>'
     +'<style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111;margin:18px}h1{font-size:15px;margin:0 0 2px}.sub{font-size:11px;color:#666;margin-bottom:10px}'
