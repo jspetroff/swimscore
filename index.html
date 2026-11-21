@@ -304,6 +304,12 @@ body.dragging .dh{cursor:grabbing;}
 .pf-pill.act{background:var(--bg3);color:var(--gold);border:1px solid var(--border);}
 .pf-pill.act.pfinal{background:rgba(76,175,125,.15);color:var(--green);border-color:rgba(76,175,125,.3);}
 .timed-final-badge{font-size:.62rem;font-family:var(--fm);padding:.15rem .5rem;border-radius:3px;background:rgba(76,175,125,.15);color:var(--green);border:1px solid rgba(76,175,125,.3);margin-left:.5rem;}
+.acc>.ct{cursor:pointer;user-select:none;-webkit-user-select:none;display:flex;align-items:center;justify-content:flex-start!important;gap:0!important}
+.acc>.ct>.btn{margin-left:auto}
+.acc>.ct::before{content:'\25BE';display:inline-block;flex:none;width:1.3em;font-size:1rem;line-height:1;color:var(--gold)}
+.acc.shut>.ct::before{content:'\25B8'}
+.acc.shut>.ct{margin-bottom:0}
+.acc.shut>:not(.ct){display:none!important}
 </style>
 </head>
 <body>
@@ -540,17 +546,17 @@ body.dragging .dh{cursor:grabbing;}
 
   <!-- TAB 5: ANALYSIS (home team) -->
   <div id="tab-ath" class="tp">
-    <div class="card">
-      <div class="ct" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem"><span id="fsHdr">Finals Sheet</span><button class="btn bsm" onclick="printFinalsSheet()">&#128424; Print</button></div>
+    <div class="card acc" data-k="fs">
+      <div class="ct" onclick="accToggle(this)" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem"><span id="fsHdr">Finals Sheet</span><button class="btn bsm" onclick="event.stopPropagation();printFinalsSheet()">&#128424; Print</button></div>
       <div id="fsBody"></div>
     </div>
-    <div class="card">
-      <div class="ct" id="athPtsHdr">Points by Athlete</div>
+    <div class="card acc" data-k="pts">
+      <div class="ct" onclick="accToggle(this)" id="athPtsHdr">Points by Athlete</div>
       <select id="swTeam" style="display:none"></select>
       <div id="swPts"></div>
     </div>
-    <div class="card">
-      <div class="ct" id="athSwHdr">Swims vs Entry Time</div>
+    <div class="card acc" data-k="sw">
+      <div class="ct" onclick="accToggle(this)" id="athSwHdr">Swims vs Entry Time</div>
       <div id="athSum" style="font-size:.8rem;color:var(--text-dim);margin-bottom:.75rem"></div>
       <div id="athSwims"></div>
     </div>
@@ -2213,6 +2219,11 @@ function rpSplits(toks,time){
   return cum;
 }
 
+// Analysis cards collapse: tap a card's title to open/close it. Closed by default; each device remembers.
+function accOpen(){try{return JSON.parse(localStorage.getItem('ssAccOpen')||'{}');}catch(e){return {};}}
+function accInit(){var o=accOpen();document.querySelectorAll('.acc').forEach(function(c){c.classList.toggle('shut',!o[c.getAttribute('data-k')]);});}
+function accToggle(t){var c=t.closest('.acc'),k=c.getAttribute('data-k'),o=accOpen();c.classList.toggle('shut');o[k]=!c.classList.contains('shut');try{localStorage.setItem('ssAccOpen',JSON.stringify(o));}catch(e){}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',accInit);else accInit();
 // ── ATHLETES TAB ─────────────────────────────────────────────────────────
 function renderAth(){
   var h1=document.getElementById('athPtsHdr');if(h1)h1.textContent='Points by Athlete — '+S.homeTeam;
