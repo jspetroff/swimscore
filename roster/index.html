@@ -4567,33 +4567,62 @@ function uaaModel(g, U) {
     return c.length === 1 ? c[0].key : add(k, team, n, null).key;
   };
   // no relays on the saved report (a DIII report uploaded before relays were kept): leave relays out for every team
+  // Add-up relay: the team's 4 fastest individual (flat-start) times in the leg events, best stroke assignment for a medley.
+  // Only for relays whose legs are individual events (400/800 FR, 400 MR, 200 FR); the 200 MR's 50s of stroke aren't swum individually.
+  const addUp = (def, team, exclude) => {
+    if (def.legs.some(ev => !UAA_EVS.includes(ev))) return null;
+    const pool = Object.values(S).filter(p => p.team === team && !(exclude || []).includes(p.key));
+    if (!def.medley) {
+      const ev = def.legs[0], l = pool.filter(p => p.times[ev]).sort((a, b) => a.times[ev] - b.times[ev]).slice(0, 4);
+      return l.length < 4 ? null : { sec: l.reduce((a, p) => a + p.times[ev], 0), keys: l.map(p => p.key), addUp: true };
+    }
+    const cand = def.legs.map(ev => pool.filter(p => p.times[ev]).sort((a, b) => a.times[ev] - b.times[ev]).slice(0, 5));
+    if (cand.some(c => !c.length)) return null;
+    let best = null;
+    cand[0].forEach(a => cand[1].forEach(b => cand[2].forEach(c => cand[3].forEach(d => {
+      const o = [a, b, c, d]; if (new Set(o.map(p => p.key)).size < 4) return;
+      const sec = o.reduce((t, p, i) => t + p.times[def.legs[i]], 0);
+      if (!best || sec < best.sec) best = { sec, keys: o.map(p => p.key), addUp: true };
+    }))));
+    return best;
+  };
+  const faster2 = (...l) => l.filter(Boolean).sort((a, b) => a.sec - b.sec)[0] || null;
   (U.noRelays ? [] : RELAY_DEFS).forEach(def => {
-    const A = [];   // {team, sec, legs:[key]}
+    const A = [];   // {team, sec, legs:[key], addUp}
+    // Other teams: their fastest relay on the report, or their add-up from the report's individual times if that's faster
     const best = {}; ((U.relays || {})[def.name] || []).forEach(r => { const sec = timeToSec(r.t); if (sec && (!best[r.tm] || sec < best[r.tm].sec)) best[r.tm] = { team: r.tm, sec, names: r.names }; });
-    Object.values(best).filter(b => b.team !== EM).forEach(b => A.push({ team: b.team, sec: b.sec,
-      legs: String(b.names || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 4).map(n => legKey(b.team, n)) }));
-    // Ours: relays actually swum this season (EagleRoster's relay results, exhibition included).
-    // UAA: A = the fastest relay swum as an A relay; B = the fastest swum as a B relay (a B can be faster than the A).
-    // An event we haven't swum yet falls back to the Relays tab's fastest combinations.
+    const others = [...new Set(Object.values(S).map(p => p.team).concat(Object.keys(best)))].filter(t => t !== EM);
+    others.forEach(team => {
+      const b = best[team], sw = b && { sec: b.sec, keys: String(b.names || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 4).map(n => legKey(team, n)) };
+      const r = faster2(sw, addUp(def, team));
+      if (r) A.push({ team, sec: r.sec, legs: r.keys, addUp: !!r.addUp });
+    });
+    // Ours: relays actually swum this season (EagleRoster's relay results, exhibition included), or the add-up when it's faster.
+    // UAA: A = the fastest swum as an A relay; B = the fastest swum as a B relay (a B can be faster than the A).
+    // NCAA (one relay per team): our fastest relay of any letter.
     const evKey = def.name.replace(' Free Relay', ' FR Relay').replace(' Medley Relay', ' MR Relay');
     const swum = (R.relays || []).filter(r => r.g === g && r.event === evKey && seasonOf(r.date) === season && timeToSec(r.time))
       .map(r => ({ sec: timeToSec(r.time), letter: r.letter, keys: (r.legs || []).slice().sort((a, b) => a.leg - b.leg).map(l => { const sid = relLegSid(l, g); return sid ? 'E|' + sid : null; }).filter(Boolean) }))
       .sort((a, b) => a.sec - b.sec);
-    // NCAA (one relay per team): our fastest relay of any letter
     const relA = pjR().bRel ? swum.find(r => r.letter === 'A') : swum[0], relB = swum.find(r => r.letter === 'B');
-    let ourRel = [relA, relB];
-    if (!swum.length) ourRel = buildBest(bank, def, 2).map(order => ({ sec: relayTotal(bank, def, order), keys: order.map(sid => 'E|' + sid) })).filter(x => x.sec != null);
-    if (ourRel[0]) A.push({ team: EM, sec: ourRel[0].sec, legs: ourRel[0].keys, ours: true });
+    let ourA = faster2(relA, addUp(def, EM));
+    // no swum relay and no add-up (the 200 MR before we've swum it): the Relays tab's fastest combinations
+    const tab = !ourA ? buildBest(bank, def, 2).map(order => ({ sec: relayTotal(bank, def, order), keys: order.map(sid => 'E|' + sid) })).filter(x => x.sec != null) : [];
+    if (!ourA) ourA = tab[0] || null;
+    // B can't use anyone on the A relay
+    const free = r => r && !r.keys.some(k => ourA.keys.includes(k)) ? r : null;
+    const ourB = ourA && faster2(free(relB), addUp(def, EM, ourA.keys), free(tab[1]));
+    if (ourA) A.push({ team: EM, sec: ourA.sec, legs: ourA.keys, ours: true, addUp: !!ourA.addUp });
     else if (best[EM]) A.push({ team: EM, sec: best[EM].sec, legs: [], ours: true });
-    A.sort((a, b) => a.sec - b.sec).forEach((x, i) => {
+    A.sort((a, b) => a.sec - b.sec).forEach(x => {
       const place = 1 + A.filter(y => y.sec < x.sec - 0.001).length, pts = P.rel[place - 1] || 0;
-      relays.push({ name: def.name, team: x.team, letter: 'A', sec: x.sec, place, pts });
-      x.legs.forEach(k => { if (S[k]) { S[k].rel = S[k].rel || []; S[k].rel.push({ name: def.name, letter: 'A', place, pts: pts / 4 }); } });
+      relays.push({ name: def.name, team: x.team, letter: 'A', sec: x.sec, place, pts, addUp: x.addUp });
+      x.legs.forEach(k => { if (S[k]) { S[k].rel = S[k].rel || []; S[k].rel.push({ name: def.name, letter: 'A', place, pts: pts / 4, addUp: x.addUp }); } });
     });
-    if (pjR().bRel && ourRel[1]) {   // UAA only: our B relay, B final, against the other teams' A times
-      const place = 9 + A.filter(y => y.team !== EM && y.sec < ourRel[1].sec - 0.001).length, pts = P.rel[place - 1] || 0;
-      relays.push({ name: def.name, team: EM, letter: 'B', sec: ourRel[1].sec, place, pts, bOnly: true });
-      ourRel[1].keys.forEach(k => { const p = S[k]; if (p) p.rel.push({ name: def.name, letter: 'B', place, pts: pts / 4 }); });
+    if (pjR().bRel && ourB) {   // UAA only: our B relay, B final, against the other teams' A times
+      const place = 9 + A.filter(y => y.team !== EM && y.sec < ourB.sec - 0.001).length, pts = P.rel[place - 1] || 0;
+      relays.push({ name: def.name, team: EM, letter: 'B', sec: ourB.sec, place, pts, bOnly: true, addUp: !!ourB.addUp });
+      ourB.keys.forEach(k => { const p = S[k]; if (p) p.rel.push({ name: def.name, letter: 'B', place, pts: pts / 4, addUp: !!ourB.addUp }); });
     }
   });
   // per-swimmer totals: individual points in their picked events + ¼ of each relay they're on.
@@ -4672,9 +4701,9 @@ function renderProj(mode) {
   const pill = (v, l) => `<div class="fpill ${V.view === v ? 'act' : ''}" onclick="${go}${VN}.view='${v}';${RN}">${l}</div>`;
   const back = uaa ? '' : `<div class="fpill" onclick="_d3l.view='event';renderD3List()">Lists</div><div class="fpill" onclick="_d3l.view='swimmer';renderD3List()">Our swimmers</div>`;
   const teamSel = (key, withAll) => `<select onchange="${VN}.${key}=this.value;${RN}" style="width:auto;max-width:200px">${withAll ? '<option value="">All teams</option>' : ''}${teamNames.map(t => `<option value="${esc(t)}" ${t === V[key] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
-  const relNote = uaa ? `<b>A</b>/<b>B</b> badges = on that relay (ours: the fastest A and B relays actually swum this season; other teams: their fastest relay on the report)`
+  const relNote = uaa ? `<b>A</b>/<b>B</b> badges = on that relay (ours: the fastest A and B relays actually swum this season; other teams: their fastest relay on the report) · <b>Σ</b> = an add-up of the 4 fastest individual times was faster than any relay swum, so it's used instead (every team; not the 200 MR)`
     : U.noRelays ? `<b>relays not included</b> — re-upload the DIII report (⇧ DIII ranks) to add them`
-    : `<b>A</b> badge = on that relay (one per team: ours, the fastest A relay actually swum this season; other teams, their fastest on the report)`;
+    : `<b>A</b> badge = on that relay (one per team: ours, the fastest relay actually swum this season; other teams, their fastest on the report) · <b>Σ</b> = an add-up of the 4 fastest individual times was faster, so it's used instead (every team; not the 200 MR)`;
   const head = `<div class="card" style="grid-column:1/-1">
       <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;font-size:.8rem">
         <div class="fbar" style="margin:0">${back}${pill('roster', uaa ? 'Roster' : 'Proj. roster')}${pill('event', uaa ? 'By event' : 'Proj. by event')}${pill('teams', 'Team scores')}</div>
@@ -4714,7 +4743,7 @@ function renderProj(mode) {
     const rows = uaaRoster(M, V.team), isEm = V.team === M.EM;
     const chip = (x, used) => `<span class="uchip u-${fin(x.place)}${used ? '' : ' u-off'}" title="${secToTime(x.sec)}${used ? '' : ' · not counted'}">${ord(x.place)} ${esc(x.ev)} · ${x.pts}</span>`;
     const fmtP = v => Math.round(v * 10) % 10 ? v.toFixed(1) : String(Math.round(v));
-    const badges = p => ['A', 'B'].map(L => { const l = p.rel.filter(r => r.letter === L); return l.length ? `<span class="urel"><span class="ubadge ub-${L}">${L}</span>${l.map(r => uaaShort(r.name) + ' <span style="color:var(--text-dim)">' + fmtP(r.pts) + '</span>').join(' · ')}</span>` : ''; }).join('');
+    const badges = p => ['A', 'B'].map(L => { const l = p.rel.filter(r => r.letter === L); return l.length ? `<span class="urel"><span class="ubadge ub-${L}">${L}</span>${l.map(r => uaaShort(r.name) + (r.addUp ? '<span title="Add-up of individual times (faster than any relay swum)" style="color:var(--gold)">Σ</span>' : '') + ' <span style="color:var(--text-dim)">' + fmtP(r.pts) + '</span>').join(' · ')}</span>` : ''; }).join('');
     const row = (p, i) => { const s = p.sid && R.swimmers[p.sid], below = i >= spots, flag = below && p.onA;
       return `<div class="imp-row" style="align-items:flex-start${below && !flag ? ';opacity:.6' : ''}${flag ? ';background:rgba(212,175,55,.08)' : ''}">
         <span style="width:1.8rem;flex:none;font-family:var(--fm);font-size:.72rem;color:var(--text-dim);text-align:right;padding-right:.4rem">${i + 1}</span>
@@ -4745,7 +4774,7 @@ function uaaPrintHtml() {
     return hdr(`${RU.name} projected results` + (L.evTeam ? ' · ' + esc(L.evTeam) : '')) + `<div class="pm">Projected entries only (each swimmer's best 3 events, each team's top ${spots}). Place · time · points.</div><div class="pcols pcols2 d3print">${body}</div>`;
   }
   const rows = uaaRoster(M, L.team), isEm = L.team === M.EM;
-  const rel = p => ['A', 'B'].map(Lt => { const l = p.rel.filter(r => r.letter === Lt); return l.length ? `<b>${Lt}</b> ${l.map(r => uaaShort(r.name) + ' ' + Math.round(r.pts * 10) / 10).join(', ')}` : ''; }).filter(Boolean).join(' · ');
+  const rel = p => ['A', 'B'].map(Lt => { const l = p.rel.filter(r => r.letter === Lt); return l.length ? `<b>${Lt}</b> ${l.map(r => uaaShort(r.name) + (r.addUp ? 'Σ' : '') + ' ' + Math.round(r.pts * 10) / 10).join(', ')}` : ''; }).filter(Boolean).join(' · ');
   const trs = rows.map((p, i) => (i === spots ? `<tr><td colspan="5" style="border-top:2px dashed #000;font-size:8px;padding:2px 0">— ${spots} swimmer spots${isEm && pjDivers(g) ? ` + ${pjDivers(g)} divers` : ''} —</td></tr>` : '') +
     `<tr${i >= spots && !p.onA ? ' style="color:#555"' : ''}><td class="r" style="width:20px">${i + 1}</td><td class="n" style="width:22%;font-weight:700">${esc(p.name)}${i >= spots && p.onA ? ' ⚑' : ''}${p.rel.length > 4 && p.ind.filter(x => x.pts).length > 2 ? (p.twoFive ? ' (5 relays → 2+5)' : ' (5 relays → 3+4)') : ''}</td><td class="r" style="width:28px"><b>${Math.round(p.total * 10) / 10}</b></td>
     <td style="white-space:normal">${p.ind.filter(x => x.pts).slice(0, 3).map(x => `<span class="upchip up-${fin(x.place)}">${ord(x.place)} ${esc(x.ev)} ${x.pts}</span>`).join(' ')}</td><td style="white-space:normal;width:24%;font-size:8.5px">${rel(p)}</td></tr>`).join('');
