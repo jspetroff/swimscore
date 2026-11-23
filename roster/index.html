@@ -574,7 +574,7 @@ new ResizeObserver(function(){document.documentElement.style.setProperty('--tfh'
     <div class="fpill" onclick="setRL('code','UwS',this)">UwS</div>
     <div class="fpill" onclick="setRL('code','S',this)">S</div>
   </div>
-  <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:1rem;font-family:var(--fm)">Lead-off = best flat-start time (incl. relay lead-offs). Legs 2–4 = best relay split; <span style="color:var(--gold)">gold</span> = no split yet, flat-start time used. • in a dropdown = already on another relay of this event (picking them swaps the two).</div>
+  <div style="font-size:.72rem;color:var(--text-dim);margin-bottom:1rem;font-family:var(--fm)">Every time shown is one you can enter: each relay is either a relay actually swum this season (its splits shown) or an add-up of the four swimmers' best flat-start individual times (relay lead-offs count), whichever is faster — A first, then B and C from the swimmers left. Relay splits are never mixed into an add-up. Changing a swimmer makes it an add-up. • in a dropdown = already on another relay of this event (picking them swaps the two).</div>
   <div id="relayManualNote" class="st stinfo" style="display:none">Edited by hand. <a href="#" onclick="_rlManual={};renderRelays();return false" style="color:var(--gold)">Reset to auto</a></div>
   <div class="cgrid" id="relayGrid"></div>
 </div>
@@ -4607,7 +4607,7 @@ function uaaModel(g, U) {
     const relA = pjR().bRel ? swum.find(r => r.letter === 'A') : swum[0], relB = swum.find(r => r.letter === 'B');
     let ourA = faster2(relA, addUp(def, EM));
     // no swum relay and no add-up (the 200 MR before we've swum it): the Relays tab's fastest combinations
-    const tab = !ourA ? buildBest(bank, def, 2).map(order => ({ sec: relayTotal(bank, def, order), keys: order.map(sid => 'E|' + sid) })).filter(x => x.sec != null) : [];
+    const fb = flatBank(bank), tab = !ourA ? buildBest(fb, def, 2).map(order => ({ sec: relayTotal(fb, def, order), keys: order.map(sid => 'E|' + sid) })).filter(x => x.sec != null) : [];
     if (!ourA) ourA = tab[0] || null;
     // B can't use anyone on the A relay
     const free = r => r && !r.keys.some(k => ourA.keys.includes(k)) ? r : null;
@@ -4926,7 +4926,7 @@ function relayLegSelect(defIdx, ri, leg, sid, bank, def) {
   const opts = Object.keys(bank).map(x => ({ x, t: legTime(bank, x, def.legs[leg], leg === 0) })).filter(o => o.t)
     .sort((a, b) => a.t.sec - b.t.sec)
     .map(o => { const s = R.swimmers[o.x];
-      return `<option value="${o.x}" ${o.x === sid ? 'selected' : ''}>${esc(s.last)}, ${esc(s.first)} ${secToTime(o.t.sec)}${o.t.tag === 'flat' ? ' (flat)' : ''}${used.has(o.x) && o.x !== sid ? ' •' : ''}</option>`; }).join('');
+      return `<option value="${o.x}" ${o.x === sid ? 'selected' : ''}>${esc(s.last)}, ${esc(s.first)} ${secToTime(o.t.sec)}${used.has(o.x) && o.x !== sid ? ' •' : ''}</option>`; }).join('');
   return `<select style="font-size:.75rem" onchange="setRelayLeg(${defIdx},${ri},${leg},this.value)"><option value="">— open —</option>${opts}</select>`;
 }
 
@@ -4940,6 +4940,36 @@ function setRelayLeg(defIdx, ri, leg, sid) {
   renderRelays();
 }
 
+// Entry-legal relays only: an add-up of flat-start individual times (lead-off splits count — they're official individual times),
+// or a relay actually swum. Relay splits never mix into an add-up.
+function flatBank(bank) {
+  const out = {};
+  Object.entries(bank).forEach(([sid, b]) => { const f = {}; Object.keys(b).forEach(k => { if (k.startsWith('ind|')) f[k] = b[k]; }); if (Object.keys(f).length) out[sid] = f; });
+  return out;
+}
+// Relays swum this season (season / meet-code filters as the tab), legs resolved to swimmers
+function swumRelays(g, def) {
+  const evKey = def.name.replace(' Free Relay', ' FR Relay').replace(' Medley Relay', ' MR Relay');
+  return (R.relays || []).filter(r => r.g === g && r.event === evKey && seasonOf(r.date) === _rl.season && (_rl.code === 'all' || r.code === _rl.code) && timeToSec(r.time) < 9999)
+    .map(r => { const legs = (r.legs || []).slice().sort((a, b) => a.leg - b.leg);
+      const order = legs.map(l => relLegSid(l, g));
+      return { order, sec: timeToSec(r.time), swum: { meet: r.meet, date: r.date, letter: r.letter, splits: legs.map(l => l.time || '') } }; })
+    .filter(r => r.order.length === 4 && r.order.every(x => x && R.swimmers[x] && isActive(R.swimmers[x])))
+    .sort((a, b) => a.sec - b.sec);
+}
+// Best n relays with different swimmers: each is the faster of the best relay swum and the best flat add-up from who's left
+function buildLegal(bank, def, n, g) {
+  const swum = swumRelays(g, def), used = new Set(), out = [];
+  for (let i = 0; i < n; i++) {
+    const pool = Object.keys(bank).filter(x => !used.has(x));
+    const ad = bestRelay(bank, def, pool), adSec = ad ? relayTotal(bank, def, ad.order) : null;
+    const sw = swum.find(r => !r.order.some(x => used.has(x)));
+    const pick = sw && (adSec == null || sw.sec <= adSec + 0.001) ? sw : ad ? { order: ad.order, sec: adSec, swum: null } : null;
+    if (!pick) break;
+    out.push(pick); pick.order.forEach(x => used.add(x));
+  }
+  return out;
+}
 function renderRelays() {
   ensureState();
   const seasons = [...new Set(R.swims.map(s => seasonOf(s.date)))].sort().reverse();
@@ -4952,28 +4982,31 @@ function renderRelays() {
   if (!_rl.season || !seasons.includes(_rl.season)) _rl.season = seasons[0];
   sel.innerHTML = seasons.map(s => `<option ${s === _rl.season ? 'selected' : ''}>${s}</option>`).join('');
 
-  const bank = relayBank(_rl.gender);
+  const bank = flatBank(relayBank(_rl.gender));
   let h = '';
   RELAY_DEFS.forEach((def, di) => {
-    const relays = _rlManual[def.name] || (_rl.mode === 'even' ? buildEven(bank, def, _rl.count) : buildBest(bank, def, _rl.count));
+    const legal = !_rlManual[def.name] && _rl.mode !== 'even' ? buildLegal(bank, def, _rl.count, _rl.gender) : null;
+    const relays = _rlManual[def.name] || (legal ? legal.map(x => x.order) : buildEven(bank, def, _rl.count));
     _rlLast[def.name] = { relays };
-    const totals = relays.map(r => relayTotal(bank, def, r));
+    const totals = legal ? legal.map(x => x.sec) : relays.map(r => relayTotal(bank, def, r));
     const valid = totals.filter(t => t != null);
     const spread = valid.length > 1 ? Math.max(...valid) - Math.min(...valid) : null;
     h += `<div class="card"><div class="ct" style="display:flex;justify-content:space-between"><span>${def.name}</span>${
       spread != null ? `<span>spread ${spread.toFixed(2)}s</span>` : ''}</div>`;
     if (!relays.length) h += '<div style="font-size:.78rem;color:var(--text-dim)">Not enough swimmers with times.</div>';
     relays.forEach((r, ri) => {
+      const sw = legal && legal[ri] && legal[ri].swum;
       h += `<div style="display:flex;justify-content:space-between;align-items:center;margin:.6rem 0 .3rem">
-        <span style="font-family:var(--fm);font-weight:700;color:var(--gold)">${RELAY_LETTERS[ri]}</span>
+        <span style="font-family:var(--fm);font-weight:700;color:var(--gold)">${RELAY_LETTERS[ri]}
+          <span style="font-weight:400;font-size:.62rem;color:var(--text-dim);margin-left:.4rem">${sw ? `swum · ${esc(sw.meet)} · ${sw.date.slice(5).replace('-', '/')}` : totals[ri] != null ? 'add-up of individual times' : ''}</span></span>
         <span style="font-family:var(--fm);font-weight:700">${totals[ri] != null ? secToTime(totals[ri]) : '—'}</span></div>`;
       r.forEach((sid, leg) => {
-        const t = sid ? legTime(bank, sid, def.legs[leg], leg === 0) : null;
+        const t = sw ? (timeToSec(sw.splits[leg]) < 9999 ? { sec: timeToSec(sw.splits[leg]), tag: 'swum' } : null) : sid ? legTime(bank, sid, def.legs[leg], leg === 0) : null;
         h += `<div class="relay-lane"><span class="lane-num">${leg + 1}</span>
           <div>${relayLegSelect(di, ri, leg, sid, bank, def)}
             <div style="font-size:.65rem;color:var(--text-dim);font-family:var(--fm);margin-top:.2rem">${def.legs[leg]}${leg === 0 ? ' · lead-off' : ''}</div></div>
-          <span style="font-family:var(--fm);font-size:.78rem;color:${t ? (t.tag === 'flat' ? 'var(--gold)' : 'var(--green)') : 'var(--text-dim)'}">${t ? secToTime(t.sec) : '—'}</span>
-          <span style="font-size:.6rem;font-family:var(--fm);color:var(--text-dim);width:2.2rem;text-align:right">${t ? (t.tag === 'flat' && leg ? 'flat' : t.tag === 'LO' ? 'LO' : '') : ''}</span>
+          <span style="font-family:var(--fm);font-size:.78rem;color:${t ? (t.tag === 'swum' ? 'var(--text)' : 'var(--green)') : 'var(--text-dim)'}">${t ? secToTime(t.sec) : '—'}</span>
+          <span style="font-size:.6rem;font-family:var(--fm);color:var(--text-dim);width:2.2rem;text-align:right">${t ? (t.tag === 'swum' ? (leg ? 'split' : '') : t.tag === 'LO' ? 'LO' : '') : ''}</span>
         </div>`;
       });
     });
