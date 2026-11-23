@@ -2248,7 +2248,7 @@ function parseUsasTopTimes(pages) {
           if (/^\d+$/.test(t[0]) && /^(?:\d+:)?\d+\.\d\d/.test(t[1] || '') && /^\d+\/\d+\/\d+$/.test(t[di])) {
             cur = { r: +t[0], t: t[1].replace(/(?:[a-z]|\([a-z]\))+$/, ''), tm: t[di - 2] || '', d: t[di], names: t.slice(2, di - 2).join(' ') };
             (out.relays[rel] = out.relays[rel] || []).push(cur);
-          } else if (cur && t[0] !== '#' && !/^\(c\)/.test(t[0])) cur.names += ' ' + t.join(' ');
+          } else if (cur && t[0] !== '#' && !/^\(c\)/.test(t[0]) && !/^Page$/.test(t[0])) cur.names += ' ' + t.join(' ').replace(/\s*Page \d+ of \d+.*$/, '');   // page footer can land on a wrapped names line
           return;
         }
         if (!ev || !/^\d+$/.test(t[0]) || !/^(?:\d+:)?\d+\.\d\d(?:[a-z]|\([a-z]\))*$/.test(t[1] || '')) return;
@@ -4546,12 +4546,19 @@ function uaaModel(g, U) {
   _rl.season = season; _rl.code = 'all';
   let bank; try { bank = relayBank(g); } finally { _rl.season = keep.season; _rl.code = keep.code; }
   const relays = [];
+  // A relay leg's name can be longer or shorter than the same swimmer's individual entries ("Sheila Monera Cabarique" / "Sheila Monera"):
+  // match a teammate whose name starts with the other, when exactly one does
+  const legKey = (team, n) => {
+    const k = uaaKey(team, n); if (S[k]) return k;
+    const w = nmNorm(n), c = Object.values(S).filter(p => p.team === team && !p.sid && (p => { const v = nmNorm(p.name); return v && w && (v.startsWith(w + ' ') || w.startsWith(v + ' ')); })(p));
+    return c.length === 1 ? c[0].key : add(k, team, n, null).key;
+  };
   // no relays on the saved report (a DIII report uploaded before relays were kept): leave relays out for every team
   (U.noRelays ? [] : RELAY_DEFS).forEach(def => {
     const A = [];   // {team, sec, legs:[key]}
     const best = {}; ((U.relays || {})[def.name] || []).forEach(r => { const sec = timeToSec(r.t); if (sec && (!best[r.tm] || sec < best[r.tm].sec)) best[r.tm] = { team: r.tm, sec, names: r.names }; });
     Object.values(best).filter(b => b.team !== EM).forEach(b => A.push({ team: b.team, sec: b.sec,
-      legs: String(b.names || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 4).map(n => add(uaaKey(b.team, n), b.team, n, null).key) }));
+      legs: String(b.names || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 4).map(n => legKey(b.team, n)) }));
     const ourRel = buildBest(bank, def, 2).map(order => ({ order, sec: relayTotal(bank, def, order) })).filter(x => x.sec != null);
     if (ourRel[0]) A.push({ team: EM, sec: ourRel[0].sec, legs: ourRel[0].order.map(sid => 'E|' + sid), ours: true });
     else if (best[EM]) A.push({ team: EM, sec: best[EM].sec, legs: [], ours: true });
@@ -4581,10 +4588,17 @@ function uaaModel(g, U) {
   all.forEach(totals);
   // roster cut: each team keeps its top N by individual + relay points; individual places are then worked out again
   const byTeam = {}; all.forEach(p => (byTeam[p.team] = byTeam[p.team] || []).push(p));
-  const kept = new Set();
-  Object.values(byTeam).forEach(l => l.slice().sort((a, b) => b.total - a.total).slice(0, spots).forEach(p => kept.add(p.key)));
-  field = fieldOf(all.filter(p => kept.has(p.key)));
-  all.forEach(p => { p.ind = score(p, field); });
+  let kept = new Set();
+  // the cut changes the field, which changes places and totals: repeat until the cut stops changing (a few passes at most)
+  for (let pass = 0; pass < 4; pass++) {
+    const k2 = new Set();
+    Object.values(byTeam).forEach(l => l.slice().sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)).slice(0, spots).forEach(p => k2.add(p.key)));
+    const same = pass && k2.size === kept.size && [...k2].every(k => kept.has(k));
+    kept = k2;
+    field = fieldOf(all.filter(p => kept.has(p.key)));
+    all.forEach(p => { p.ind = score(p, field); totals(p); });
+    if (same) break;
+  }
   Object.values(S).forEach(p => {
     p.ind = p.ind || []; p.rel = (p.rel || []).slice().sort((a, b) => a.letter.localeCompare(b.letter) || relOrder(a) - relOrder(b));
     totals(p);
