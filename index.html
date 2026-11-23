@@ -2277,6 +2277,23 @@ function renderAthSwims(){
     });});
   });
   var names=Object.keys(by).sort();
+  // Best meet: each event counts once (the swimmer's better swim vs their PB going in), averaged as % of the PB.
+  // Positive = better than PB. Swimmers with no PB on record for any of their events have no score.
+  var score={};
+  names.forEach(function(nm){
+    var per={};
+    by[nm].forEach(function(x){
+      if(!x.lt)return;var a=tSec(x.time),b=tSec(x.lt);if(a===null||b===null||!b)return;
+      var pc=100*(x.dive?a-b:b-a)/b,k=x.ev.num;
+      if(per[k]===undefined||pc>per[k])per[k]=pc;
+    });
+    var v=Object.keys(per).map(function(k){return per[k];});
+    if(v.length)score[nm]={avg:v.reduce(function(a,b){return a+b;},0)/v.length,n:v.length};
+  });
+  var sortBest=athSortMode()==='best';
+  if(sortBest)names.sort(function(a,b){var x=score[a],y=score[b];if(x&&y)return y.avg-x.avg||a.localeCompare(b);if(x||y)return x?-1:1;return a.localeCompare(b);});
+  var sortBar='<div class="sp" style="margin-bottom:.5rem"><div class="pill'+(sortBest?'':' active')+'" onclick="setAthSort(\'az\')">A&ndash;Z</div><div class="pill'+(sortBest?' active':'')+'" onclick="setAthSort(\'best\')">Best meet</div></div>'
+    +(sortBest?'<div style="font-size:.7rem;color:var(--text-dim);margin-bottom:.4rem">Ranked by average % vs lifetime best going into the meet; each event counts once, using the better of prelim and final. '+(ER&&S.meetDate?'':'Needs EagleRoster and the meet date.')+'</div>':'');
   if(!names.length){box.innerHTML='<div style="color:var(--text-dim);font-size:.82rem">No '+esc(home)+' swims with times yet. Times come from uploaded results PDFs.</div>';sum.textContent='';return;}
   // swims: lower is better; dives: higher is better. gain > 0 = better than the comparison.
   function gain(sw,ref){var a=tSec(sw.time),b=tSec(ref);if(a===null||b===null)return null;return sw.dive?a-b:b-a;}
@@ -2291,11 +2308,15 @@ function renderAthSwims(){
   function ord(n){var t=['th','st','nd','rd'],v=n%100;return n+(t[(v-20)%10]||t[v]||t[0]);}
   var RD={P:'Prelim',F:'Final',TF:'Timed final'};
   var h='<div style="overflow-x:auto"><table class="lb ath" style="width:100%;font-size:.78rem"><thead><tr><th>Event</th><th>Time</th><th title="Change vs entry time">&plusmn;Entry</th><th title="Change vs season best before this meet (EagleRoster)">&plusmn;SB</th><th title="Change vs lifetime best before this meet (EagleRoster)">&plusmn;PB</th><th title="Final vs the same swimmer\u2019s prelim">&plusmn;Prelim</th></tr></thead><tbody>';
+  var rank=0;
   names.forEach(function(nm){
     var sw=by[nm].sort(function(a,b){return a.ev.num-b.ev.num||(a.rd==='P'?-1:1);});
+    var sc=score[nm],scTxt='';
+    if(sortBest)scTxt=sc?' <span style="font-weight:600;font-size:.72rem;color:var('+(sc.avg>0.004?'--green':sc.avg<-0.004?'--red':'--text-dim')+')">'+Math.abs(sc.avg).toFixed(2)+'% '+(sc.avg>=0?'better':'worse')+' than PB</span><span style="font-weight:400;font-size:.66rem;color:var(--text-dim)"> avg of '+sc.n+' event'+(sc.n===1?'':'s')+'</span>'
+      :' <span style="font-weight:400;font-size:.66rem;color:var(--text-dim)">no PB on record</span>';
     var faster=0,cmp=0;
     sw.forEach(function(x){var g=gain(x,x.seed);if(g!==null){cmp++;if(g>0.004)faster++;}});
-    h+='<tr><td colspan="6" style="padding-top:.7rem;font-weight:600;color:var(--text)">'+esc(nm)+(noMatch[nm]?' <span style="font-weight:400;font-size:.66rem;color:var(--red)">not found in EagleRoster</span>':'')
+    h+='<tr><td colspan="6" style="padding-top:.7rem;font-weight:600;color:var(--text)">'+(sortBest&&sc?(++rank)+'. ':'')+esc(nm)+scTxt+(noMatch[nm]?' <span style="font-weight:400;font-size:.66rem;color:var(--red)">not found in EagleRoster</span>':'')
       +(cmp?' <span style="font-weight:400;font-size:.7rem;color:var(--text-dim)">'+faster+' of '+cmp+' better than entry</span>':'')+'</td></tr>';
     sw.forEach(function(x){
       var ge=gain(x,x.seed),gp=x.pre?gain(x,x.pre):null,gs=x.sb?gain(x,x.sb):null,gl=x.lt?gain(x,x.lt):null;
@@ -2316,7 +2337,7 @@ function renderAthSwims(){
         +'<td style="font-family:var(--fm)">'+(x.pre?cell(gp,x.dive):'')+'</td></tr>';
     });
   });
-  box.innerHTML=h+'</tbody></table></div>';
+  box.innerHTML=sortBar+h+'</tbody></table></div>';
   function pc(a,b){return b?Math.round(100*a/b)+'%':'';}
   sum.innerHTML='<strong style="color:var(--text)">'+nFast+' of '+nSw+'</strong> swims better than entry ('+pc(nFast,nSw)+')'
     +(nFin?' &middot; <strong style="color:var(--text)">'+nFinFast+' of '+nFin+'</strong> finals better than prelims ('+pc(nFinFast,nFin)+')':'')
@@ -2331,6 +2352,8 @@ function renderAthSwims(){
     +'<div style="font-size:.7rem;margin-top:.25rem">Green = better. Swims show the time change (&minus;0.42 = 0.42 faster); dives show the score change.</div>';
 }
 
+function athSortMode(){try{return localStorage.getItem('ssAthSort')||'az';}catch(e){return 'az';}}
+function setAthSort(m){try{localStorage.setItem('ssAthSort',m);}catch(e){}renderAthSwims();}
 function updSwimmerPts(){
   var box=document.getElementById('swPts'),sel=document.getElementById('swTeam');if(!box||!sel)return;
   SW_TEAM=S.homeTeam;   // Athletes tab: home team only
