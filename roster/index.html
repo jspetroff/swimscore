@@ -4437,7 +4437,8 @@ async function ctRenderUploadInfo() {
 //  · Individual: each Emory swimmer's best time this season (report or imported since) is placed among the UAA field
 //    in the NCAA championship events. Other swimmers count only in their best 3 events by report rank; teammates
 //    count only in the 3 events they're projected to swim. Places score with the UAA table (24 places, as in SwimScore).
-//  · Relays: A and B are the Relays tab's fastest combinations. A relays fill places 1–8 (one per team), B relays
+//  · Relays: ours are the fastest A and B relays actually swum this season (Relays tab combos only for an event not swum yet).
+//    A relays fill places 1–8 (one per team), B relays
 //    stay in the B final (9–16), placed against the other teams' fastest times (the report has only those). ¼ of the points per leg.
 //  · A swimmer counts 3 individual events + 4 relays, or 2 + 5 — whichever totals more.
 const UAA_PTS = { ind: [32, 28, 27, 26, 25, 24, 23, 22, 20, 17, 16, 15, 14, 13, 12, 11, 9, 7, 6, 5, 4, 3, 2, 1],
@@ -4505,11 +4506,23 @@ const uaaShort = n => n.replace(' Free Relay', ' FR').replace(' Medley Relay', '
 //     best 3 events by where they'd place;
 //  2. those entries are placed and scored (UAA 24 places); each team keeps its top N swimmers by those points
 //     (N = our swimmer spots), and the places are worked out again with just those;
-//  3. relays: each team's fastest relay on the report is its A relay (ours: the Relays tab's fastest A and B), A relays
+//  3. relays: each team's fastest relay on the report is its A relay (ours: the fastest A and B swum this season), A relays
 //     place 1–8, our B relay from 9th against the other teams' A times; legs get ¼ of the points.
 // Team scores = individual points of each team's top N + A relays (the report has no B relays or diving).
 const uaaKey = (tm, n) => tm + '|' + nmNorm(n);
 const uaaOrd = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+// A relay leg's swimmer: its saved id, else the name — allowing a misspelled last name on the results ("Allison Greenway")
+// when exactly one swimmer of that gender has the same first name and a last name one or two letters off.
+function relLegSid(l, g) {
+  if (l.sid) return l.sid;
+  const id = d3Sid(l.name || '', g); if (id) return id;
+  const parts = nmNorm(l.name).split(' '); if (parts.length < 2) return null;
+  const first = parts[0], last = parts.slice(1).join(' ');
+  const ed = (a, b) => { const d = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) d[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
+  const c = Object.values(R.swimmers).filter(s => s.gender === g && nmNorm(s.first) === first && ed(nmNorm(s.last), last) <= 2);
+  return c.length === 1 ? c[0].id : null;
+}
 function uaaModel(g, U) {
   const season = U.season, spots = pjSwimSpots(g), P = pjR().pts;
   const faster = (list, sec, self) => list.filter(x => x.sec < sec - 0.001 && x.key !== self).length;
@@ -4559,8 +4572,18 @@ function uaaModel(g, U) {
     const best = {}; ((U.relays || {})[def.name] || []).forEach(r => { const sec = timeToSec(r.t); if (sec && (!best[r.tm] || sec < best[r.tm].sec)) best[r.tm] = { team: r.tm, sec, names: r.names }; });
     Object.values(best).filter(b => b.team !== EM).forEach(b => A.push({ team: b.team, sec: b.sec,
       legs: String(b.names || '').split(',').map(x => x.trim()).filter(Boolean).slice(0, 4).map(n => legKey(b.team, n)) }));
-    const ourRel = buildBest(bank, def, 2).map(order => ({ order, sec: relayTotal(bank, def, order) })).filter(x => x.sec != null);
-    if (ourRel[0]) A.push({ team: EM, sec: ourRel[0].sec, legs: ourRel[0].order.map(sid => 'E|' + sid), ours: true });
+    // Ours: relays actually swum this season (EagleRoster's relay results, exhibition included).
+    // UAA: A = the fastest relay swum as an A relay; B = the fastest swum as a B relay (a B can be faster than the A).
+    // An event we haven't swum yet falls back to the Relays tab's fastest combinations.
+    const evKey = def.name.replace(' Free Relay', ' FR Relay').replace(' Medley Relay', ' MR Relay');
+    const swum = (R.relays || []).filter(r => r.g === g && r.event === evKey && seasonOf(r.date) === season && timeToSec(r.time))
+      .map(r => ({ sec: timeToSec(r.time), letter: r.letter, keys: (r.legs || []).slice().sort((a, b) => a.leg - b.leg).map(l => { const sid = relLegSid(l, g); return sid ? 'E|' + sid : null; }).filter(Boolean) }))
+      .sort((a, b) => a.sec - b.sec);
+    // NCAA (one relay per team): our fastest relay of any letter
+    const relA = pjR().bRel ? swum.find(r => r.letter === 'A') : swum[0], relB = swum.find(r => r.letter === 'B');
+    let ourRel = [relA, relB];
+    if (!swum.length) ourRel = buildBest(bank, def, 2).map(order => ({ sec: relayTotal(bank, def, order), keys: order.map(sid => 'E|' + sid) })).filter(x => x.sec != null);
+    if (ourRel[0]) A.push({ team: EM, sec: ourRel[0].sec, legs: ourRel[0].keys, ours: true });
     else if (best[EM]) A.push({ team: EM, sec: best[EM].sec, legs: [], ours: true });
     A.sort((a, b) => a.sec - b.sec).forEach((x, i) => {
       const place = 1 + A.filter(y => y.sec < x.sec - 0.001).length, pts = P.rel[place - 1] || 0;
@@ -4570,7 +4593,7 @@ function uaaModel(g, U) {
     if (pjR().bRel && ourRel[1]) {   // UAA only: our B relay, B final, against the other teams' A times
       const place = 9 + A.filter(y => y.team !== EM && y.sec < ourRel[1].sec - 0.001).length, pts = P.rel[place - 1] || 0;
       relays.push({ name: def.name, team: EM, letter: 'B', sec: ourRel[1].sec, place, pts, bOnly: true });
-      ourRel[1].order.forEach(sid => { const p = S['E|' + sid]; if (p) p.rel.push({ name: def.name, letter: 'B', place, pts: pts / 4 }); });
+      ourRel[1].keys.forEach(k => { const p = S[k]; if (p) p.rel.push({ name: def.name, letter: 'B', place, pts: pts / 4 }); });
     }
   });
   // per-swimmer totals: individual points in their picked events + ¼ of each relay they're on.
@@ -4649,9 +4672,9 @@ function renderProj(mode) {
   const pill = (v, l) => `<div class="fpill ${V.view === v ? 'act' : ''}" onclick="${go}${VN}.view='${v}';${RN}">${l}</div>`;
   const back = uaa ? '' : `<div class="fpill" onclick="_d3l.view='event';renderD3List()">Lists</div><div class="fpill" onclick="_d3l.view='swimmer';renderD3List()">Our swimmers</div>`;
   const teamSel = (key, withAll) => `<select onchange="${VN}.${key}=this.value;${RN}" style="width:auto;max-width:200px">${withAll ? '<option value="">All teams</option>' : ''}${teamNames.map(t => `<option value="${esc(t)}" ${t === V[key] ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
-  const relNote = uaa ? `<b>A</b>/<b>B</b> badges = on that relay (ours: the Relays tab's fastest A and B; other teams: their fastest relay on the report)`
+  const relNote = uaa ? `<b>A</b>/<b>B</b> badges = on that relay (ours: the fastest A and B relays actually swum this season; other teams: their fastest relay on the report)`
     : U.noRelays ? `<b>relays not included</b> — re-upload the DIII report (⇧ DIII ranks) to add them`
-    : `<b>A</b> badge = on that relay (one per team: ours, the Relays tab's fastest; other teams, their fastest on the report)`;
+    : `<b>A</b> badge = on that relay (one per team: ours, the fastest A relay actually swum this season; other teams, their fastest on the report)`;
   const head = `<div class="card" style="grid-column:1/-1">
       <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;font-size:.8rem">
         <div class="fbar" style="margin:0">${back}${pill('roster', uaa ? 'Roster' : 'Proj. roster')}${pill('event', uaa ? 'By event' : 'Proj. by event')}${pill('teams', 'Team scores')}</div>
@@ -4726,7 +4749,7 @@ function uaaPrintHtml() {
   const trs = rows.map((p, i) => (i === spots ? `<tr><td colspan="5" style="border-top:2px dashed #000;font-size:8px;padding:2px 0">— ${spots} swimmer spots${isEm && pjDivers(g) ? ` + ${pjDivers(g)} divers` : ''} —</td></tr>` : '') +
     `<tr${i >= spots && !p.onA ? ' style="color:#555"' : ''}><td class="r" style="width:20px">${i + 1}</td><td class="n" style="width:22%;font-weight:700">${esc(p.name)}${i >= spots && p.onA ? ' ⚑' : ''}${p.rel.length > 4 && p.ind.filter(x => x.pts).length > 2 ? (p.twoFive ? ' (5 relays → 2+5)' : ' (5 relays → 3+4)') : ''}</td><td class="r" style="width:28px"><b>${Math.round(p.total * 10) / 10}</b></td>
     <td style="white-space:normal">${p.ind.filter(x => x.pts).slice(0, 3).map(x => `<span class="upchip up-${fin(x.place)}">${ord(x.place)} ${esc(x.ev)} ${x.pts}</span>`).join(' ')}</td><td style="white-space:normal;width:24%;font-size:8.5px">${rel(p)}</td></tr>`).join('');
-  return hdr(`${RU.name} projected roster — ${esc(L.team)}`) + `<div class="pm">Ranked on projected ${RU.name} points: individual (best 3 events) + ¼ of each relay (3 + 4 relays, or 2 + 5 if worth more). ${uaa ? 'A/B' : 'A'} = on that relay${isEm ? (uaa ? " (Relays tab's fastest A and B)" : " (Relays tab's fastest)") : ' (their fastest relay on the report)'}; ⚑ = below the cutoff but on an A relay. Green = A final, yellow = B${uaa ? ', orange = C' : ''}.</div>
+  return hdr(`${RU.name} projected roster — ${esc(L.team)}`) + `<div class="pm">Ranked on projected ${RU.name} points: individual (best 3 events) + ¼ of each relay (3 + 4 relays, or 2 + 5 if worth more). ${uaa ? 'A/B' : 'A'} = on that relay${isEm ? (uaa ? " (fastest A and B relays swum this season)" : " (fastest A relay swum this season)") : ' (their fastest relay on the report)'}; ⚑ = below the cutoff but on an A relay. Green = A final, yellow = B${uaa ? ', orange = C' : ''}.</div>
     <table class="pt d3sw" style="font-size:9.5px">${trs}</table>`;
 }
 
