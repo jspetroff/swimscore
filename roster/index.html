@@ -4927,7 +4927,9 @@ function relayLegSelect(defIdx, ri, leg, sid, bank, def) {
     .sort((a, b) => a.t.sec - b.t.sec)
     .map(o => { const s = R.swimmers[o.x];
       return `<option value="${o.x}" ${o.x === sid ? 'selected' : ''}>${esc(s.last)}, ${esc(s.first)} ${secToTime(o.t.sec)}${used.has(o.x) && o.x !== sid ? ' •' : ''}</option>`; }).join('');
-  return `<select style="font-size:.75rem" onchange="setRelayLeg(${defIdx},${ri},${leg},this.value)"><option value="">— open —</option>${opts}</select>`;
+  // a swimmer on a relay actually swum may have no individual time in this leg's event — still show them
+  const cur = sid && R.swimmers[sid] && !opts.includes(`value="${sid}"`) ? `<option value="${sid}" selected>${esc(R.swimmers[sid].last)}, ${esc(R.swimmers[sid].first)} (no individual ${def.legs[leg]})</option>` : '';
+  return `<select style="font-size:.75rem" onchange="setRelayLeg(${defIdx},${ri},${leg},this.value)"><option value="">— open —</option>${cur}${opts}</select>`;
 }
 
 function setRelayLeg(defIdx, ri, leg, sid) {
